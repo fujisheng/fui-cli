@@ -28,30 +28,22 @@ namespace FUI.Cli
 
         public class Parameters
         {
-            [UnityCliParam("View Name")]
-            public string ViewName { get; set; }
-
-            [UnityCliParam("Element Name")]
-            public string ElementName { get; set; }
+            [UnityCliParam("Element selector: { view, element, itemIndex?, child? }")]
+            public Dictionary<string, object> selector { get; set; }
         }
 
         protected override object ExecuteCommand(Parameters parameters, ToolContext context, Dictionary<string, object> args)
         {
-            if (string.IsNullOrEmpty(parameters?.ViewName) || string.IsNullOrEmpty(parameters?.ElementName))
+            if (!FuiElementSelectorResolver.TryResolve(parameters?.selector, out var selection, out var error))
             {
-                return new { Success = false, Error = "Missing parameters", Message = "viewName and elementName parameters are required" };
+                return error;
             }
 
-            var element = UIElementInspectorHelpers.FindElement(parameters.ViewName, parameters.ElementName);
-            if (element == null)
-            {
-                return new { Success = false, Error = $"Element '{parameters.ElementName}' not found in '{parameters.ViewName}'" };
-            }
-
-            var elementObject = UIElementInspectorHelpers.GetElementGameObject(element);
+            var element = selection.Target;
+            var elementObject = selection.GameObject;
             if (elementObject == null)
             {
-                return new { Success = false, Error = "Cannot resolve GameObject from element" };
+                return ToolResult.Error("selector_target_has_no_gameobject", "Cannot resolve GameObject from selector target", new { selection.Selector });
             }
 
             var properties = new Dictionary<string, object>();
@@ -93,7 +85,14 @@ namespace FUI.Cli
                 }
             }
 
-            return new { Success = true, Message = "Inspected element", Data = new { elementName = parameters.ElementName, properties } };
+            return ToolResult.Ok(new
+            {
+                selector = selection.Selector,
+                targetPath = selection.TargetPath,
+                targetInstanceId = elementObject.GetInstanceID(),
+                elementName = UIInspectorHelpers.GetElementName(element),
+                properties
+            }, "Inspected element");
         }
     }
 
@@ -112,30 +111,15 @@ namespace FUI.Cli
 
         public class Parameters
         {
-            [UnityCliParam("View Name")]
-            public string ViewName { get; set; }
-
-            [UnityCliParam("Element Name")]
-            public string ElementName { get; set; }
+            [UnityCliParam("Element selector: { view, element, itemIndex?, child? }")]
+            public Dictionary<string, object> selector { get; set; }
         }
 
         protected override object ExecuteCommand(Parameters parameters, ToolContext context, Dictionary<string, object> args)
         {
-            if (string.IsNullOrEmpty(parameters?.ViewName) || string.IsNullOrEmpty(parameters?.ElementName))
+            if (!FuiElementSelectorResolver.TryResolveGameObject(parameters?.selector, out var elementObject, out var selection, out var error))
             {
-                return new { Success = false, Error = "Missing parameters", Message = "viewName and elementName parameters are required" };
-            }
-
-            var element = UIElementInspectorHelpers.FindElement(parameters.ViewName, parameters.ElementName);
-            if (element == null)
-            {
-                return new { Success = false, Error = $"Element '{parameters.ElementName}' not found in '{parameters.ViewName}'" };
-            }
-
-            var elementObject = UIElementInspectorHelpers.GetElementGameObject(element);
-            if (elementObject == null)
-            {
-                return new { Success = false, Error = "Element GameObject not found" };
+                return error;
             }
 
             var components = new List<object>
@@ -189,7 +173,13 @@ namespace FUI.Cli
                 components.Add(new { type = componentType.Name, properties = props });
             }
 
-            return new { Success = true, Message = "Inspected element details", Data = new { components } };
+            return ToolResult.Ok(new
+            {
+                selector = selection.Selector,
+                targetPath = selection.TargetPath,
+                targetInstanceId = elementObject.GetInstanceID(),
+                components
+            }, "Inspected element details");
         }
     }
 
@@ -198,97 +188,6 @@ namespace FUI.Cli
     /// </summary>
     internal static class UIElementInspectorHelpers
     {
-        public static object FindElement(string viewName, string path)
-        {
-            if (string.IsNullOrEmpty(viewName) || string.IsNullOrEmpty(path))
-            {
-                return null;
-            }
-
-            var entities = UIInspectorHelpers.GetEntities();
-            var viewEntity = entities?.FirstOrDefault(entity => UIInspectorHelpers.GetPropertyValue(entity, "Name")?.ToString() == viewName);
-            var view = UIInspectorHelpers.GetPropertyValue(viewEntity, "View") as IView;
-            if (view == null)
-            {
-                return null;
-            }
-
-            var parts = path.Split(new[] { '/' }, 2);
-            var firstPart = parts[0];
-            var remainingPath = parts.Length > 1 ? parts[1] : null;
-            var currentElement = view.GetElement(firstPart, typeof(IElement));
-
-            if (string.IsNullOrEmpty(remainingPath))
-            {
-                if (currentElement != null)
-                {
-                    return currentElement;
-                }
-
-                return UIInteractionHelpers.FindChildInAllCanvases(viewName, path);
-            }
-
-            if (currentElement is ListViewElement listView)
-            {
-                return FindItemInListView(listView, remainingPath);
-            }
-
-            var elementGameObject = GetElementGameObject(currentElement);
-            if (elementGameObject != null)
-            {
-                var child = elementGameObject.transform.Find(remainingPath);
-                if (child != null)
-                {
-                    return child.gameObject;
-                }
-            }
-
-            return UIInteractionHelpers.FindChildInAllCanvases(viewName, path);
-        }
-
-        static object FindItemInListView(ListViewElement listView, string path)
-        {
-            var parts = path.Split(new[] { '/' }, 2);
-            var indexOrName = parts[0];
-            var rest = parts.Length > 1 ? parts[1] : null;
-
-            if (!(UIInspectorHelpers.GetPropertyValue(listView, "ItemEntites") is IList itemEntities))
-            {
-                return null;
-            }
-
-            object targetEntity = null;
-            if (int.TryParse(indexOrName, out var index) && index >= 0 && index < itemEntities.Count)
-            {
-                targetEntity = itemEntities[index];
-            }
-            else
-            {
-                foreach (var entity in itemEntities)
-                {
-                    var name = UIInspectorHelpers.GetPropertyValue(entity, "Name") as string;
-                    if (name == indexOrName)
-                    {
-                        targetEntity = entity;
-                        break;
-                    }
-                }
-            }
-
-            if (targetEntity == null)
-            {
-                return null;
-            }
-
-            var itemView = UIInspectorHelpers.GetPropertyValue(targetEntity, "View") as IView;
-            if (string.IsNullOrEmpty(rest))
-            {
-                return itemView;
-            }
-
-            return itemView?.GetElement(rest, typeof(IElement));
-        }
-
         public static GameObject GetElementGameObject(object element)
         {
             switch (element)

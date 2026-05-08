@@ -25,18 +25,15 @@ namespace FUI.Cli
 
         public class Parameters
         {
-            [UnityCliParam("View Name")]
-            public string viewName { get; set; }
-
-            [UnityCliParam("Element Name")]
-            public string elementName { get; set; }
+            [UnityCliParam("Element selector: { view, element, itemIndex?, child? }")]
+            public Dictionary<string, object> selector { get; set; }
         }
 
         protected override object ExecuteCommand(Parameters parameters, ToolContext context, Dictionary<string, object> args)
         {
-            if (string.IsNullOrEmpty(parameters?.viewName) || string.IsNullOrEmpty(parameters?.elementName))
+            if (parameters?.selector == null)
             {
-                return new { Success = false, Error = "Missing parameters", Message = "viewName and elementName parameters are required" };
+                return ToolResult.Error("invalid_parameter", "selector 参数是必需的。");
             }
 
             if (EventSystem.current == null)
@@ -44,10 +41,9 @@ namespace FUI.Cli
                 return new { Success = false, Error = "No EventSystem found", Message = "场景中没有 EventSystem，无法模拟点击" };
             }
 
-            var elementObject = ResolveElementGameObject(parameters.viewName, parameters.elementName);
-            if (elementObject == null)
+            if (!ResolveElementGameObject(parameters.selector, out var elementObject, out var selection, out var selectorError))
             {
-                return new { Success = false, Error = $"Element '{parameters.elementName}' not found in '{parameters.viewName}'" };
+                return selectorError;
             }
 
             if (!elementObject.activeInHierarchy)
@@ -98,7 +94,10 @@ namespace FUI.Cli
                     Message = isOccluded ? occlusionWarning : "点击成功",
                     Data = new
                     {
-                        targetElement = parameters.elementName,
+                        selector = selection.Selector,
+                        targetElement = elementObject.name,
+                        targetPath = selection.TargetPath,
+                        targetInstanceId = elementObject.GetInstanceID(),
                         screenPosition = new { x = screenPosition.x, y = screenPosition.y },
                         clickedVia = button != null ? "Button" : toggle != null ? "Toggle" : "PointerClickHandler",
                         isOccluded,
@@ -112,16 +111,9 @@ namespace FUI.Cli
             }
         }
 
-        internal static GameObject ResolveElementGameObject(string viewName, string elementName)
+        internal static bool ResolveElementGameObject(Dictionary<string, object> selector, out GameObject gameObject, out FuiElementSelection selection, out ToolResult error)
         {
-            var element = UIElementInspectorHelpers.FindElement(viewName, elementName);
-            var elementObject = UIElementInspectorHelpers.GetElementGameObject(element);
-            if (elementObject != null)
-            {
-                return elementObject;
-            }
-
-            return UIInteractionHelpers.FindChildInAllCanvases(viewName, elementName);
+            return FuiElementSelectorResolver.TryResolveGameObject(selector, out gameObject, out selection, out error);
         }
 
         static string GetGameObjectPath(GameObject gameObject)
@@ -179,11 +171,8 @@ namespace FUI.Cli
 
         public class Parameters
         {
-            [UnityCliParam("View Name")]
-            public string viewName { get; set; }
-
-            [UnityCliParam("Element Name")]
-            public string elementName { get; set; }
+            [UnityCliParam("Element selector: { view, element, itemIndex?, child? }")]
+            public Dictionary<string, object> selector { get; set; }
 
             [UnityCliParam("Text to input")]
             public string text { get; set; }
@@ -194,15 +183,14 @@ namespace FUI.Cli
 
         protected override object ExecuteCommand(Parameters parameters, ToolContext context, Dictionary<string, object> args)
         {
-            if (string.IsNullOrEmpty(parameters?.viewName) || string.IsNullOrEmpty(parameters?.elementName) || parameters.text == null)
+            if (parameters?.selector == null || parameters.text == null)
             {
-                return new { Success = false, Error = "Missing parameters", Message = "viewName, elementName, and text parameters are required" };
+                return ToolResult.Error("invalid_parameter", "selector and text parameters are required");
             }
 
-            var elementObject = ClickElementTool.ResolveElementGameObject(parameters.viewName, parameters.elementName);
-            if (elementObject == null)
+            if (!ClickElementTool.ResolveElementGameObject(parameters.selector, out var elementObject, out var selection, out var selectorError))
             {
-                return new { Success = false, Error = $"Element '{parameters.elementName}' not found in '{parameters.viewName}'" };
+                return selectorError;
             }
 
             var inputField = elementObject.GetComponent<InputField>();
@@ -215,7 +203,7 @@ namespace FUI.Cli
                     inputField.onSubmit.Invoke(parameters.text);
                 }
 
-                return new { Success = true, Message = "Input text set via InputField" };
+                return ToolResult.Ok(new { selector = selection.Selector, targetPath = selection.TargetPath }, "Input text set via InputField");
             }
 
             if (TmpInputFieldType != null)
@@ -236,7 +224,7 @@ namespace FUI.Cli
                             InvokeUnityEvent(onSubmitEvent, parameters.text);
                         }
 
-                        return new { Success = true, Message = "Input text set via TMP_InputField" };
+                        return ToolResult.Ok(new { selector = selection.Selector, targetPath = selection.TargetPath }, "Input text set via TMP_InputField");
                     }
                     catch (Exception exception)
                     {
@@ -245,7 +233,7 @@ namespace FUI.Cli
                 }
             }
 
-            return new { Success = false, Error = "Element is not an InputField (no Unity UI InputField or TMP_InputField found)" };
+            return ToolResult.Error("not_supported", "Element is not an InputField (no Unity UI InputField or TMP_InputField found)", new { selection.Selector });
         }
 
         static void InvokeUnityEvent(object unityEvent, string parameter)
@@ -303,11 +291,8 @@ namespace FUI.Cli
             [UnityCliParam("Swipe interpolation steps", Required = false)]
             public int steps { get; set; } = 12;
 
-            [UnityCliParam("Optional View Name", Required = false)]
-            public string viewName { get; set; }
-
-            [UnityCliParam("Optional Element Name", Required = false)]
-            public string elementName { get; set; }
+            [UnityCliParam("Optional element selector: { view, element, itemIndex?, child? }", Required = false)]
+            public Dictionary<string, object> selector { get; set; }
         }
 
         protected override object ExecuteCommand(Parameters parameters, ToolContext context, Dictionary<string, object> args)
@@ -355,7 +340,7 @@ namespace FUI.Cli
                 {
                     Success = false,
                     Error = "No swipe target found",
-                    Message = "未找到可响应拖拽的 UI 元素，请检查 viewName/elementName 或起始坐标是否命中 UI"
+                    Message = "未找到可响应拖拽的 UI 元素，请检查 selector 或起始坐标是否命中 UI"
                 };
             }
 
@@ -402,16 +387,9 @@ namespace FUI.Cli
 
         static GameObject ResolveSwipeTarget(Parameters parameters, Vector2 startPosition)
         {
-            if (!string.IsNullOrEmpty(parameters.viewName) && !string.IsNullOrEmpty(parameters.elementName))
+            if (parameters.selector != null && parameters.selector.Count > 0)
             {
-                var element = UIElementInspectorHelpers.FindElement(parameters.viewName, parameters.elementName);
-                var elementObject = UIElementInspectorHelpers.GetElementGameObject(element);
-                if (elementObject != null)
-                {
-                    return elementObject;
-                }
-
-                return UIInteractionHelpers.FindChildInAllCanvases(parameters.viewName, parameters.elementName);
+                return ClickElementTool.ResolveElementGameObject(parameters.selector, out var elementObject, out _, out _) ? elementObject : null;
             }
 
             var pointerData = new PointerEventData(EventSystem.current)
@@ -491,101 +469,6 @@ namespace FUI.Cli
     /// </summary>
     internal static class UIInteractionHelpers
     {
-        public static GameObject FindChildInAllCanvases(string viewName, string elementName)
-        {
-            var canvases = UnityEngine.Object.FindObjectsOfType<Canvas>();
-            foreach (var canvas in canvases)
-            {
-                if (ContainsIgnoreCase(canvas.name, viewName) || ContainsIgnoreCase(viewName, canvas.name))
-                {
-                    var found = FindChildRecursive(canvas.transform, elementName);
-                    if (found != null)
-                    {
-                        return found;
-                    }
-                }
-
-                var parent = canvas.transform.parent;
-                if (parent != null && (ContainsIgnoreCase(parent.name, viewName) || ContainsIgnoreCase(viewName, parent.name)))
-                {
-                    var found = FindChildRecursive(canvas.transform, elementName);
-                    if (found != null)
-                    {
-                        return found;
-                    }
-                }
-            }
-
-            var directFind = GameObject.Find(elementName);
-            if (directFind != null)
-            {
-                return directFind;
-            }
-
-            var viewGameObject = GameObject.Find(viewName);
-            if (viewGameObject != null)
-            {
-                var found = FindChildRecursive(viewGameObject.transform, elementName);
-                if (found != null)
-                {
-                    return found;
-                }
-            }
-
-            return null;
-        }
-
-        static GameObject FindChildRecursive(Transform parent, string name)
-        {
-            if (name.Contains("/", StringComparison.Ordinal))
-            {
-                var parts = name.Split(new[] { '/' }, 2);
-                var candidates = new List<Transform>();
-                FindAllChildrenRecursive(parent, parts[0], candidates);
-                foreach (var candidate in candidates)
-                {
-                    var target = candidate.Find(parts[1]);
-                    if (target != null)
-                    {
-                        return target.gameObject;
-                    }
-                }
-
-                return null;
-            }
-
-            for (var index = 0; index < parent.childCount; index++)
-            {
-                var child = parent.GetChild(index);
-                if (child.name == name)
-                {
-                    return child.gameObject;
-                }
-
-                var found = FindChildRecursive(child, name);
-                if (found != null)
-                {
-                    return found;
-                }
-            }
-
-            return null;
-        }
-
-        static void FindAllChildrenRecursive(Transform parent, string name, List<Transform> results)
-        {
-            for (var index = 0; index < parent.childCount; index++)
-            {
-                var child = parent.GetChild(index);
-                if (child.name == name)
-                {
-                    results.Add(child);
-                }
-
-                FindAllChildrenRecursive(child, name, results);
-            }
-        }
-
         public static (GameObject blockedBy, List<GameObject> hits) RaycastAtScreenPoint(Vector2 screenPosition)
         {
             var eventSystem = EventSystem.current;
@@ -659,14 +542,5 @@ namespace FUI.Cli
             return null;
         }
 
-        static bool ContainsIgnoreCase(string source, string value)
-        {
-            if (string.IsNullOrEmpty(source) || string.IsNullOrEmpty(value))
-            {
-                return false;
-            }
-
-            return source.IndexOf(value, StringComparison.OrdinalIgnoreCase) >= 0;
-        }
     }
 }

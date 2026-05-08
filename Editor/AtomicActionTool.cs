@@ -307,11 +307,11 @@ namespace FUI.Cli
             [UnityCliParam("Action type: set_property, click, input_text, toggle")]
             public string action { get; set; }
 
-            [UnityCliParam("View Name")]
-            public string viewName { get; set; }
+            [UnityCliParam("Element selector for click/input/toggle: { view, element, itemIndex?, child? }", Required = false)]
+            public Dictionary<string, object> selector { get; set; }
 
-            [UnityCliParam("Element Name (for click/input/toggle)")]
-            public string elementName { get; set; }
+            [UnityCliParam("View Name (for set_property)", Required = false)]
+            public string viewName { get; set; }
 
             [UnityCliParam("Property Name (for set_property)")]
             public string propertyName { get; set; }
@@ -325,9 +325,9 @@ namespace FUI.Cli
 
         protected override object ExecuteCommand(Parameters parameters, ToolContext context, Dictionary<string, object> args)
         {
-            if (string.IsNullOrEmpty(parameters?.action) || string.IsNullOrEmpty(parameters?.viewName))
+            if (string.IsNullOrEmpty(parameters?.action))
             {
-                return ToolResult.Error("invalid_parameter", "action 和 viewName 参数是必需的。");
+                return ToolResult.Error("invalid_parameter", "action 参数是必需的。");
             }
 
             var action = parameters.action.Trim().ToLowerInvariant();
@@ -340,24 +340,29 @@ namespace FUI.Cli
             switch (action)
             {
                 case "set_property":
+                    if (string.IsNullOrEmpty(parameters.viewName))
+                    {
+                        return ToolResult.Error("invalid_parameter", "set_property 需要 viewName 参数。");
+                    }
+
                     actionDescription = $"设置 {parameters.propertyName} = {parameters.value}";
                     beforeState = GetPropertyState(parameters.viewName, parameters.propertyName);
                     (actionSuccess, actionError) = SetProperty(parameters.viewName, parameters.propertyName, parameters.value);
                     break;
                 case "click":
-                    actionDescription = $"点击 {parameters.viewName}/{parameters.elementName}";
-                    beforeState = GetElementState(parameters.viewName, parameters.elementName);
-                    (actionSuccess, actionError) = SimulateClick(parameters.viewName, parameters.elementName);
+                    actionDescription = "点击 selector 目标";
+                    beforeState = GetElementState(parameters.selector);
+                    (actionSuccess, actionError) = SimulateClick(parameters.selector);
                     break;
                 case "input_text":
-                    actionDescription = $"输入文本到 {parameters.viewName}/{parameters.elementName}";
-                    beforeState = GetElementState(parameters.viewName, parameters.elementName);
-                    (actionSuccess, actionError) = SimulateInputText(parameters.viewName, parameters.elementName, parameters.value);
+                    actionDescription = "输入文本到 selector 目标";
+                    beforeState = GetElementState(parameters.selector);
+                    (actionSuccess, actionError) = SimulateInputText(parameters.selector, parameters.value);
                     break;
                 case "toggle":
-                    actionDescription = $"切换 {parameters.viewName}/{parameters.elementName}";
-                    beforeState = GetElementState(parameters.viewName, parameters.elementName);
-                    (actionSuccess, actionError) = ToggleElement(parameters.viewName, parameters.elementName);
+                    actionDescription = "切换 selector 目标";
+                    beforeState = GetElementState(parameters.selector);
+                    (actionSuccess, actionError) = ToggleElement(parameters.selector);
                     break;
                 default:
                     return ToolResult.Error("invalid_parameter", $"不支持的操作类型: {action}。支持: set_property, click, input_text, toggle。");
@@ -375,7 +380,7 @@ namespace FUI.Cli
             }
             else if (actionSuccess)
             {
-                afterState = GetElementState(parameters.viewName, parameters.elementName);
+                afterState = GetElementState(parameters.selector);
             }
 
             return ToolResult.Ok(new
@@ -384,6 +389,7 @@ namespace FUI.Cli
                 toolId = Id,
                 action = parameters.action,
                 viewName = parameters.viewName,
+                selector = parameters.selector,
                 description = actionDescription,
                 error = actionError,
                 waitFrames,
@@ -435,12 +441,11 @@ namespace FUI.Cli
             };
         }
 
-        static object CreateElementSnapshot(string viewName, string elementName)
+        static object CreateElementSnapshot(Dictionary<string, object> selector)
         {
             return new
             {
-                viewName,
-                elementName
+                selector
             };
         }
 
@@ -481,23 +486,22 @@ namespace FUI.Cli
             }
         }
 
-        static object GetElementState(string viewName, string elementName)
+        static object GetElementState(Dictionary<string, object> selector)
         {
             try
             {
                 var tool = new UIElementInspectorTool();
                 var result = tool.Execute(new Dictionary<string, object>
                 {
-                    ["ViewName"] = viewName,
-                    ["ElementName"] = elementName
+                    ["selector"] = selector
                 }, ToolContext.CreateCurrent());
 
                 if (!result.IsOk || result.Data == null)
                 {
-                    return CreateElementSnapshot(viewName, elementName);
+                    return CreateElementSnapshot(selector);
                 }
 
-                return ReadNamedValue(result.Data, "properties") ?? CreateElementSnapshot(viewName, elementName);
+                return ReadNamedValue(result.Data, "properties") ?? CreateElementSnapshot(selector);
             }
             catch (Exception exception)
             {
@@ -525,15 +529,14 @@ namespace FUI.Cli
             }
         }
 
-        static (bool success, string error) SimulateClick(string viewName, string elementName)
+        static (bool success, string error) SimulateClick(Dictionary<string, object> selector)
         {
             try
             {
                 var tool = new ClickElementTool();
                 var result = tool.Execute(new Dictionary<string, object>
                 {
-                    ["viewName"] = viewName,
-                    ["elementName"] = elementName
+                    ["selector"] = selector
                 }, ToolContext.CreateCurrent());
 
                 return (result.IsOk, result.IsOk ? null : (result.ErrorInfo?.message ?? "点击失败。"));
@@ -544,15 +547,14 @@ namespace FUI.Cli
             }
         }
 
-        static (bool success, string error) SimulateInputText(string viewName, string elementName, string text)
+        static (bool success, string error) SimulateInputText(Dictionary<string, object> selector, string text)
         {
             try
             {
                 var tool = new InputTextTool();
                 var result = tool.Execute(new Dictionary<string, object>
                 {
-                    ["viewName"] = viewName,
-                    ["elementName"] = elementName,
+                    ["selector"] = selector,
                     ["text"] = text,
                     ["submit"] = true
                 }, ToolContext.CreateCurrent());
@@ -565,14 +567,13 @@ namespace FUI.Cli
             }
         }
 
-        static (bool success, string error) ToggleElement(string viewName, string elementName)
+        static (bool success, string error) ToggleElement(Dictionary<string, object> selector)
         {
             try
             {
-                var elementObject = ClickElementTool.ResolveElementGameObject(viewName, elementName);
-                if (elementObject == null)
+                if (!ClickElementTool.ResolveElementGameObject(selector, out var elementObject, out _, out var selectorError))
                 {
-                    return (false, $"元素 '{elementName}' 未找到。");
+                    return (false, selectorError?.ErrorInfo?.message ?? "元素未找到。");
                 }
 
                 var toggleComponent = elementObject.GetComponent<UnityEngine.UI.Toggle>();

@@ -23,11 +23,8 @@ namespace FUI.Cli
 
         public class Parameters
         {
-            [UnityCliParam("View Name")]
-            public string viewName { get; set; }
-
-            [UnityCliParam("Element Name")]
-            public string elementName { get; set; }
+            [UnityCliParam("Element selector: { view, element, itemIndex?, child? }")]
+            public Dictionary<string, object> selector { get; set; }
 
             [UnityCliParam("Property Name")]
             public string propertyName { get; set; }
@@ -38,18 +35,17 @@ namespace FUI.Cli
 
         protected override object ExecuteCommand(Parameters parameters, ToolContext context, Dictionary<string, object> args)
         {
-            if (string.IsNullOrEmpty(parameters?.viewName) || string.IsNullOrEmpty(parameters?.elementName)
-                || string.IsNullOrEmpty(parameters?.propertyName) || string.IsNullOrEmpty(parameters?.value))
+            if (string.IsNullOrEmpty(parameters?.propertyName) || string.IsNullOrEmpty(parameters?.value))
             {
-                return new { Success = false, Error = "Missing parameters", Message = "viewName, elementName, propertyName, and value parameters are required" };
+                return ToolResult.Error("invalid_parameter", "selector, propertyName, and value parameters are required");
             }
 
-            var element = UIElementInspectorHelpers.FindElement(parameters.viewName, parameters.elementName);
-            if (element == null)
+            if (!FuiElementSelectorResolver.TryResolve(parameters.selector, out var selection, out var selectorError))
             {
-                return new { Success = false, Error = "Element not found" };
+                return selectorError;
             }
 
+            var element = selection.Target;
             var type = element.GetType();
             var field = type.GetField(parameters.propertyName, BindingFlags.Public | BindingFlags.Instance);
             if (field == null)
@@ -99,7 +95,13 @@ namespace FUI.Cli
                     valueProperty.SetValue(bindableProperty, convertedValue);
                 }
 
-                return new { Success = true, Message = "Value updated", Data = new { propertyName = parameters.propertyName, value = convertedValue.ToString() } };
+                return ToolResult.Ok(new
+                {
+                    selector = selection.Selector,
+                    targetPath = selection.TargetPath,
+                    propertyName = parameters.propertyName,
+                    value = convertedValue.ToString()
+                }, "Value updated");
             }
             catch (Exception exception)
             {

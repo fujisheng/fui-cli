@@ -25,11 +25,8 @@ namespace FUI.Cli
 
         public class Parameters
         {
-            [UnityCliParam("View Name")]
-            public string viewName { get; set; }
-
-            [UnityCliParam("Element Name")]
-            public string elementName { get; set; }
+            [UnityCliParam("Element selector: { view, element, itemIndex?, child? }")]
+            public Dictionary<string, object> selector { get; set; }
 
             [UnityCliParam("Target state (true/false, empty = flip)", Required = false)]
             public string targetState { get; set; }
@@ -37,15 +34,14 @@ namespace FUI.Cli
 
         protected override object ExecuteCommand(Parameters parameters, ToolContext context, Dictionary<string, object> args)
         {
-            if (string.IsNullOrEmpty(parameters?.viewName) || string.IsNullOrEmpty(parameters?.elementName))
+            if (parameters?.selector == null)
             {
-                return new { Success = false, Error = "Missing parameters", Message = "viewName 和 elementName 参数是必需的。" };
+                return ToolResult.Error("invalid_parameter", "selector 参数是必需的。");
             }
 
-            var elementObject = ClickElementTool.ResolveElementGameObject(parameters.viewName, parameters.elementName);
-            if (elementObject == null)
+            if (!ClickElementTool.ResolveElementGameObject(parameters.selector, out var elementObject, out var selection, out var selectorError))
             {
-                return new { Success = false, Error = "Element not found", Message = $"元素 '{parameters.elementName}' 未找到。" };
+                return selectorError;
             }
 
             var toggle = elementObject.GetComponent<Toggle>();
@@ -73,8 +69,8 @@ namespace FUI.Cli
                 Message = $"Toggle 状态从 {beforeState} 变为 {targetValue}。",
                 Data = new
                 {
-                    viewName = parameters.viewName,
-                    elementName = parameters.elementName,
+                    selector = selection.Selector,
+                    targetPath = selection.TargetPath,
                     before = beforeState,
                     after = targetValue
                 }
@@ -94,11 +90,8 @@ namespace FUI.Cli
 
         public class Parameters
         {
-            [UnityCliParam("View Name")]
-            public string viewName { get; set; }
-
-            [UnityCliParam("Element Name")]
-            public string elementName { get; set; }
+            [UnityCliParam("Element selector: { view, element, itemIndex?, child? }")]
+            public Dictionary<string, object> selector { get; set; }
 
             [UnityCliParam("Slider value")]
             public float value { get; set; }
@@ -106,15 +99,14 @@ namespace FUI.Cli
 
         protected override object ExecuteCommand(Parameters parameters, ToolContext context, Dictionary<string, object> args)
         {
-            if (string.IsNullOrEmpty(parameters?.viewName) || string.IsNullOrEmpty(parameters?.elementName))
+            if (parameters?.selector == null)
             {
-                return new { Success = false, Error = "Missing parameters", Message = "viewName 和 elementName 参数是必需的。" };
+                return ToolResult.Error("invalid_parameter", "selector 参数是必需的。");
             }
 
-            var elementObject = ClickElementTool.ResolveElementGameObject(parameters.viewName, parameters.elementName);
-            if (elementObject == null)
+            if (!ClickElementTool.ResolveElementGameObject(parameters.selector, out var elementObject, out var selection, out var selectorError))
             {
-                return new { Success = false, Error = "Element not found", Message = $"元素 '{parameters.elementName}' 未找到。" };
+                return selectorError;
             }
 
             var slider = elementObject.GetComponent<Slider>();
@@ -132,8 +124,8 @@ namespace FUI.Cli
                 Message = $"Slider 值从 {beforeValue:F2} 变为 {slider.value:F2}。",
                 Data = new
                 {
-                    viewName = parameters.viewName,
-                    elementName = parameters.elementName,
+                    selector = selection.Selector,
+                    targetPath = selection.TargetPath,
                     before = beforeValue,
                     after = slider.value,
                     minValue = slider.minValue,
@@ -155,11 +147,8 @@ namespace FUI.Cli
 
         public class Parameters
         {
-            [UnityCliParam("View Name")]
-            public string viewName { get; set; }
-
-            [UnityCliParam("Element Name")]
-            public string elementName { get; set; }
+            [UnityCliParam("Element selector: { view, element, itemIndex?, child? }")]
+            public Dictionary<string, object> selector { get; set; }
 
             [UnityCliParam("Option index (0-based)", Required = false)]
             public int optionIndex { get; set; } = -1;
@@ -170,15 +159,14 @@ namespace FUI.Cli
 
         protected override object ExecuteCommand(Parameters parameters, ToolContext context, Dictionary<string, object> args)
         {
-            if (string.IsNullOrEmpty(parameters?.viewName) || string.IsNullOrEmpty(parameters?.elementName))
+            if (parameters?.selector == null)
             {
-                return new { Success = false, Error = "Missing parameters", Message = "viewName 和 elementName 参数是必需的。" };
+                return ToolResult.Error("invalid_parameter", "selector 参数是必需的。");
             }
 
-            var elementObject = ClickElementTool.ResolveElementGameObject(parameters.viewName, parameters.elementName);
-            if (elementObject == null)
+            if (!ClickElementTool.ResolveElementGameObject(parameters.selector, out var elementObject, out var selection, out var selectorError))
             {
-                return new { Success = false, Error = "Element not found", Message = $"元素 '{parameters.elementName}' 未找到。" };
+                return selectorError;
             }
 
             var dropdown = elementObject.GetComponent<Dropdown>();
@@ -221,8 +209,8 @@ namespace FUI.Cli
                 Message = $"Dropdown 从 '{beforeValue}' 变为 '{afterValue}'。",
                 Data = new
                 {
-                    viewName = parameters.viewName,
-                    elementName = parameters.elementName,
+                    selector = selection.Selector,
+                    targetPath = selection.TargetPath,
                     before = new { index = beforeIndex, text = beforeValue },
                     after = new { index = targetIndex, text = afterValue },
                     totalOptions = dropdown.options.Count
@@ -243,11 +231,8 @@ namespace FUI.Cli
 
         public class Parameters
         {
-            [UnityCliParam("View Name")]
-            public string viewName { get; set; }
-
-            [UnityCliParam("Element Name (ScrollRect element)")]
-            public string elementName { get; set; }
+            [UnityCliParam("Element selector: { view, element, itemIndex?, child? }")]
+            public Dictionary<string, object> selector { get; set; }
 
             [UnityCliParam("Target normalized position X (0-1)")]
             public float normalizedX { get; set; }
@@ -258,15 +243,14 @@ namespace FUI.Cli
 
         protected override object ExecuteCommand(Parameters parameters, ToolContext context, Dictionary<string, object> args)
         {
-            if (string.IsNullOrEmpty(parameters?.viewName) || string.IsNullOrEmpty(parameters?.elementName))
+            if (parameters?.selector == null)
             {
-                return new { Success = false, Error = "Missing parameters", Message = "viewName 和 elementName 参数是必需的。" };
+                return ToolResult.Error("invalid_parameter", "selector 参数是必需的。");
             }
 
-            var elementObject = ClickElementTool.ResolveElementGameObject(parameters.viewName, parameters.elementName);
-            if (elementObject == null)
+            if (!ClickElementTool.ResolveElementGameObject(parameters.selector, out var elementObject, out var selection, out var selectorError))
             {
-                return new { Success = false, Error = "Element not found", Message = $"元素 '{parameters.elementName}' 未找到。" };
+                return selectorError;
             }
 
             var scrollRect = elementObject.GetComponent<ScrollRect>();
@@ -287,8 +271,8 @@ namespace FUI.Cli
                 Message = $"ScrollRect 从 ({beforePosition.x:F2}, {beforePosition.y:F2}) 滚到 ({targetPosition.x:F2}, {targetPosition.y:F2})。",
                 Data = new
                 {
-                    viewName = parameters.viewName,
-                    elementName = parameters.elementName,
+                    selector = selection.Selector,
+                    targetPath = selection.TargetPath,
                     before = new { x = beforePosition.x, y = beforePosition.y },
                     after = new { x = targetPosition.x, y = targetPosition.y }
                 }
