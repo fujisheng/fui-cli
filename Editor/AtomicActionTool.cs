@@ -72,7 +72,7 @@ namespace FUI.Cli
                 }
                 else if (!string.IsNullOrWhiteSpace(parameters.properties))
                 {
-                    if (!UnityCliMigrationUtilities.TryDeserializeJsonObject(parameters.properties, out propertyDict, out var error))
+                    if (!UnityCliParameterBinder.TryDeserializeJsonObject(parameters.properties, out propertyDict, out var error))
                     {
                         return ToolResult.Error("invalid_parameter", "properties 必须是 JSON 对象。", new
                         {
