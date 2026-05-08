@@ -1,0 +1,12 @@
+{
+  "name": "@fujisheng/fui-web-to-ugui",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "extract": "node extract-visual-ui.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1"
+  }
+}

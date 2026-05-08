@@ -1,0 +1,10 @@
+# Node.js 依赖
+node_modules/
+**/node_modules/
+node_modules.meta
+**/node_modules.meta
+
+# npm
+package-lock.json
+**/package-lock.json
+**/package-lock.json.meta

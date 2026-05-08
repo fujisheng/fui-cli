@@ -1,0 +1,21 @@
+{
+    "name": "FUI.Cli",
+    "rootNamespace": "",
+    "references": [
+        "GUID:ba33003a9e4264b489353a80d1ce7509",
+        "GUID:ac71262e8a02ed24d8747d5ee4f34aa8",
+        "GUID:fe318fd709c916649a3aac24f866ab0b",
+        "GUID:5ddde23d727f558419f4585ec8c49c86",
+        "GUID:5b770071175304b44bca4be737e87220",
+        "GUID:b8dfc198079bdaf4d9ff09de6b519c0f"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
