@@ -1,6 +1,6 @@
 # FUI CLI
 
-[![Unity](https://img.shields.io/badge/Unity-2019.4+-black.svg?style=flat&logo=unity)](https://unity.com/)
+[![Unity](https://img.shields.io/badge/Unity-2022.3+-black.svg?style=flat&logo=unity)](https://unity.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 > FUI CLI 是面向 [FUI](https://github.com/fujisheng/FUI) 框架的 Unity Editor CLI 扩展工具集，构建于 [UnityCli](https://github.com/fujisheng/unitycli) 之上，提供 Web 原型到 UGUI Prefab 的正式工具链、运行态诊断、交互操作和 ViewModel 状态修改能力。
@@ -34,7 +34,7 @@
 
 | 依赖 | 版本 | 说明 |
 |------|------|------|
-| [Unity](https://unity.com/) | 2019.4+ | 基础引擎版本 |
+| [Unity](https://unity.com/) | 2022.3+ | 基础引擎版本，FUI SourceGenerator 需要 Unity 2022.3 及以上 |
 | [FUI](https://github.com/fujisheng/FUI) | main | FUI 核心框架（MVVM + UGUI） |
 | [UnityCli](https://github.com/fujisheng/unitycli) | main | Named Pipe 桥接层，提供 CLI ↔ Editor 通信 |
 | `com.unity.nuget.mono-cecil` | 1.11.5 | Unity 内置 NuGet 包，用于 IL 处理 |
