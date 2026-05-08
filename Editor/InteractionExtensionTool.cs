@@ -340,7 +340,7 @@ namespace FUI.Cli
 
             try
             {
-                var stepCount = UnityCliMigrationUtilities.HasArgument(args, nameof(Parameters.steps))
+                var stepCount = UnityCliParameterBinder.HasArgument(args, nameof(Parameters.steps))
                     ? Mathf.Clamp(parameters.steps, 1, 240)
                     : Mathf.Clamp(Mathf.CeilToInt(Mathf.Clamp(parameters.duration, 0.05f, 10f) * 60f), 1, 240);
 

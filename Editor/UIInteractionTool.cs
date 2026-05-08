@@ -312,7 +312,7 @@ namespace FUI.Cli
                 return new { Success = false, Error = "Invalid duration", Message = "duration 必须在 (0, 10] 秒范围内" };
             }
 
-            var hasExplicitSteps = UnityCliMigrationUtilities.HasArgument(args, nameof(Parameters.steps));
+            var hasExplicitSteps = UnityCliParameterBinder.HasArgument(args, nameof(Parameters.steps));
             var stepCount = hasExplicitSteps
                 ? parameters.steps
                 : Mathf.Clamp(Mathf.CeilToInt(parameters.duration * 60f), 1, 240);
