@@ -47,7 +47,7 @@ namespace FUI.Cli
             var entities = UIInspectorHelpers.GetEntities();
             if (entities == null)
             {
-                return new { Success = false, Error = "Collector resolution failed", Message = "Failed to resolve FUI.Editor.UIEntitites collector." };
+                return new { Success = false, Error = "Registry resolution failed", Message = "Failed to resolve FUI.Editor.UIEntityRegistry." };
             }
 
             var targetEntity = entities.FirstOrDefault(entity => UIInspectorHelpers.GetPropertyValue(entity, "Name")?.ToString() == viewName);
