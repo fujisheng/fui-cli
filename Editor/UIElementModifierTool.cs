@@ -6,7 +6,7 @@ using UnityCli.Editor.Core;
 using UnityCli.Protocol;
 using UnityEngine;
 
-namespace Game.Editor.Cli
+namespace FUI.Cli
 {
     /// <summary>
     /// 修改 UI 元素的 BindableProperty 值。

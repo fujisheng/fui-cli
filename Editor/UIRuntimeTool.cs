@@ -6,7 +6,7 @@ using UnityCli.Editor.Attributes;
 using UnityCli.Editor.Core;
 using UnityCli.Protocol;
 
-namespace Game.Editor.Cli
+namespace FUI.Cli
 {
     /// <summary>
     /// 修改 ViewModel 属性值。

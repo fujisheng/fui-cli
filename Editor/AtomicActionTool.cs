@@ -8,7 +8,7 @@ using UnityCli.Editor.Core;
 using UnityCli.Protocol;
 using UnityEngine;
 
-namespace Game.Editor.Cli
+namespace FUI.Cli
 {
     /// <summary>
     /// 批量设置 ViewModel 属性值，一次调用修改多个属性。

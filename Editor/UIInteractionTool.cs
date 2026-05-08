@@ -8,7 +8,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-namespace Game.Editor.Cli
+namespace FUI.Cli
 {
     /// <summary>
     /// 模拟点击 UI 元素。

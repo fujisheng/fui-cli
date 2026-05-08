@@ -7,7 +7,7 @@ using UnityCli.Editor.Attributes;
 using UnityCli.Editor.Core;
 using UnityCli.Protocol;
 
-namespace Game.Editor.Cli
+namespace FUI.Cli
 {
     static class UnityCliMigrationUtilities
     {

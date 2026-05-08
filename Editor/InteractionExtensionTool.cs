@@ -8,7 +8,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-namespace Game.Editor.Cli
+namespace FUI.Cli
 {
     /// <summary>
     /// 扩展 UI 交互操作：Toggle、Slider、Dropdown、ScrollRect、Drag。

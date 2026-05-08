@@ -8,7 +8,7 @@ using UnityCli.Protocol;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace Game.Editor.Cli
+namespace FUI.Cli
 {
     /// <summary>
     /// 诊断视图绑定有效性。

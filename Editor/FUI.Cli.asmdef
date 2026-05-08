@@ -1,6 +1,6 @@
 {
     "name": "FUI.Cli",
-    "rootNamespace": "",
+    "rootNamespace": "FUI.Cli",
     "references": [
         "GUID:ba33003a9e4264b489353a80d1ce7509",
         "GUID:ac71262e8a02ed24d8747d5ee4f34aa8",

@@ -11,7 +11,7 @@ using UnityCli.Editor.Attributes;
 using UnityCli.Editor.Core;
 using UnityCli.Protocol;
 
-namespace Game.Editor.Cli
+namespace FUI.Cli
 {
     [UnityCliTool(
         "ui.web_to_ugui_prefab",

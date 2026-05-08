@@ -10,7 +10,7 @@ using UnityCli.Editor.Core;
 using UnityCli.Protocol;
 using UnityEngine;
 
-namespace Game.Editor.Cli
+namespace FUI.Cli
 {
     /// <summary>
     /// 列出当前打开的 UI 视图。
