@@ -142,6 +142,13 @@ const plan = await page.evaluate(({ width, height, viewName }) => {
         return 'TextElement';
       case 'container':
         return 'Container';
+      case 'scrollview':
+        return 'ScrollView';
+      case 'listview':
+      case 'grid':
+        return 'ListView';
+      case 'template':
+        return 'Template';
       case 'image':
       default:
         return 'ImageElement';
@@ -156,6 +163,14 @@ const plan = await page.evaluate(({ width, height, viewName }) => {
     const color = style.color === 'rgba(0, 0, 0, 0)' ? '' : style.color;
     const text = directText(element);
     const webType = element.dataset.uiType || 'Image';
+    const readNumberData = (name, fallback = 0) => {
+      const value = Number.parseFloat(element.dataset[name] || '');
+      return Number.isFinite(value) ? clamp(value) : fallback;
+    };
+    const readIntegerData = (name, fallback = 0) => {
+      const value = Number.parseInt(element.dataset[name] || '', 10);
+      return Number.isFinite(value) ? value : fallback;
+    };
 
     return {
       element,
@@ -175,7 +190,9 @@ const plan = await page.evaluate(({ width, height, viewName }) => {
           textColor: rgbToHex(color),
           alpha: clamp(alphaFromColor(backgroundColor, style.opacity)),
           opacity: clamp(toNumber(style.opacity) || 1),
-          borderRadius: clamp(toNumber(style.borderTopLeftRadius))
+          borderRadius: clamp(toNumber(style.borderTopLeftRadius)),
+          contentWidth: clamp(element.scrollWidth || rect.width),
+          contentHeight: clamp(element.scrollHeight || rect.height)
         },
         text: {
           content: text,
@@ -183,6 +200,27 @@ const plan = await page.evaluate(({ width, height, viewName }) => {
           fontWeight: style.fontWeight,
           color: rgbToHex(color),
           alignment: style.textAlign || 'left'
+        },
+        list: {
+          layout: element.dataset.listLayout || '',
+          binding: element.dataset.listBinding || '',
+          itemView: element.dataset.itemView || '',
+          rowView: element.dataset.rowView || '',
+          scrollDirection: element.dataset.scrollDirection || '',
+          gridConstraint: element.dataset.gridConstraint || '',
+          gridCount: readIntegerData('gridCount', 0),
+          cellWidth: readNumberData('cellWidth', 0),
+          cellHeight: readNumberData('cellHeight', 0),
+          spacingX: readNumberData('spacingX', toNumber(style.columnGap) || toNumber(style.gap) || 0),
+          spacingY: readNumberData('spacingY', toNumber(style.rowGap) || toNumber(style.gap) || 0),
+          paddingLeft: readNumberData('paddingLeft', toNumber(style.paddingLeft) || 0),
+          paddingRight: readNumberData('paddingRight', toNumber(style.paddingRight) || 0),
+          paddingTop: readNumberData('paddingTop', toNumber(style.paddingTop) || 0),
+          paddingBottom: readNumberData('paddingBottom', toNumber(style.paddingBottom) || 0)
+        },
+        template: {
+          kind: element.dataset.templateKind || '',
+          view: element.dataset.templateView || element.dataset.uiId || ''
         },
         children: []
       }

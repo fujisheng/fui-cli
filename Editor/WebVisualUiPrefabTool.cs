@@ -218,7 +218,36 @@ namespace FUI.Cli
         public WebVisualRect rect = new WebVisualRect();
         public WebVisualStyle style = new WebVisualStyle();
         public WebVisualText text = new WebVisualText();
+        public WebVisualList list = new WebVisualList();
+        public WebVisualTemplate template = new WebVisualTemplate();
         public List<WebVisualNode> children = new List<WebVisualNode>();
+    }
+
+    [Serializable]
+    public sealed class WebVisualList
+    {
+        public string layout = string.Empty;
+        public string binding = string.Empty;
+        public string itemView = string.Empty;
+        public string rowView = string.Empty;
+        public string scrollDirection = string.Empty;
+        public string gridConstraint = string.Empty;
+        public int gridCount;
+        public float cellWidth;
+        public float cellHeight;
+        public float spacingX;
+        public float spacingY;
+        public float paddingLeft;
+        public float paddingRight;
+        public float paddingTop;
+        public float paddingBottom;
+    }
+
+    [Serializable]
+    public sealed class WebVisualTemplate
+    {
+        public string kind = string.Empty;
+        public string view = string.Empty;
     }
 
     [Serializable]
@@ -238,6 +267,8 @@ namespace FUI.Cli
         public float alpha = 1f;
         public float opacity = 1f;
         public float borderRadius;
+        public float contentWidth;
+        public float contentHeight;
     }
 
     [Serializable]
@@ -390,7 +421,8 @@ namespace FUI.Cli
             ApplyElement(nodeObject, node, result, nodePath);
 
             result.nodeCount++;
-            if (!string.Equals(NormalizeElement(node.element), "Container", StringComparison.Ordinal))
+            var element = NormalizeElement(node.element);
+            if (!string.Equals(element, "Container", StringComparison.Ordinal))
             {
                 result.elementCount++;
             }
@@ -400,10 +432,35 @@ namespace FUI.Cli
                 return;
             }
 
-            foreach (var child in node.children)
+            var childParent = ResolveChildParent(nodeObject);
+            var childParentRect = ResolveChildParentRect(node);
+            var childIndex = 0;
+            foreach (var child in ResolveChildrenToCreate(node, result, nodePath))
             {
-                CreateNode(nodeObject.transform, child, node.rect, result, nodePath);
+                CreateNode(childParent, child, childParentRect, result, nodePath);
+                ConfigureListTemplateChild(nodeObject, node, childIndex);
+                childIndex++;
             }
+        }
+
+        static IEnumerable<WebVisualNode> ResolveChildrenToCreate(WebVisualNode node, WebVisualPrefabResult result, string nodePath)
+        {
+            if (!string.Equals(NormalizeElement(node.element), "ListView", StringComparison.Ordinal))
+            {
+                return node.children;
+            }
+
+            var children = node.children ?? new List<WebVisualNode>();
+            if (children.Count <= 1)
+            {
+                return children;
+            }
+
+            result.warnings.Add(WebVisualPrefabIssue.Create(
+                "listview_multiple_templates",
+                "ListView 只会使用第一个子节点作为 item template；其它子节点应由运行时列表数据生成。",
+                nodePath));
+            return new[] { children[0] };
         }
 
         static void ApplyRect(RectTransform rectTransform, WebVisualRect rect, WebVisualRect parentRect)
@@ -433,6 +490,15 @@ namespace FUI.Cli
                     {
                         ConfigureImage(nodeObject, node.style, false);
                     }
+                    break;
+                case "ScrollView":
+                    ConfigureScrollView(nodeObject, node);
+                    break;
+                case "ListView":
+                    ConfigureListView(nodeObject, node);
+                    break;
+                case "Template":
+                    ConfigureTemplate(nodeObject, node);
                     break;
                 case "TextElement":
                     ConfigureText(nodeObject, node.text, node.style, false);
@@ -473,6 +539,31 @@ namespace FUI.Cli
             }
         }
 
+        static Transform ResolveChildParent(GameObject nodeObject)
+        {
+            var content = nodeObject.transform.Find("Viewport/Content");
+            return content == null ? nodeObject.transform : content;
+        }
+
+        static WebVisualRect ResolveChildParentRect(WebVisualNode node)
+        {
+            var element = NormalizeElement(node.element);
+            if (!string.Equals(element, "ScrollView", StringComparison.Ordinal)
+                && !string.Equals(element, "ListView", StringComparison.Ordinal))
+            {
+                return node.rect;
+            }
+
+            var contentSize = ResolveScrollContentSize(node);
+            return new WebVisualRect
+            {
+                x = node.rect.x,
+                y = node.rect.y,
+                width = contentSize.x,
+                height = contentSize.y
+            };
+        }
+
         static string NormalizeElement(string element)
         {
             if (string.IsNullOrWhiteSpace(element))
@@ -488,6 +579,259 @@ namespace FUI.Cli
             var image = EnsureComponent<Image>(nodeObject);
             image.color = ParseColor(style == null ? string.Empty : style.color, Color.white, ResolveAlpha(style));
             image.raycastTarget = raycastTarget;
+        }
+
+        static void ConfigureScrollView(GameObject nodeObject, WebVisualNode node)
+        {
+            var scrollRect = EnsureComponent<ScrollRect>(nodeObject);
+            scrollRect.horizontal = false;
+            scrollRect.vertical = true;
+            scrollRect.movementType = ScrollRect.MovementType.Clamped;
+            scrollRect.inertia = true;
+            scrollRect.scrollSensitivity = 40f;
+
+            var viewportObject = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(Mask));
+            viewportObject.transform.SetParent(nodeObject.transform, false);
+            var viewportRect = viewportObject.GetComponent<RectTransform>();
+            viewportRect.anchorMin = Vector2.zero;
+            viewportRect.anchorMax = Vector2.one;
+            viewportRect.pivot = new Vector2(0.5f, 0.5f);
+            viewportRect.offsetMin = Vector2.zero;
+            viewportRect.offsetMax = Vector2.zero;
+
+            var viewportImage = viewportObject.GetComponent<Image>();
+            viewportImage.color = new Color(1f, 1f, 1f, 0.01f);
+            viewportImage.raycastTarget = true;
+
+            var mask = viewportObject.GetComponent<Mask>();
+            mask.showMaskGraphic = false;
+
+            var contentObject = new GameObject("Content", typeof(RectTransform));
+            contentObject.transform.SetParent(viewportObject.transform, false);
+            var contentRect = contentObject.GetComponent<RectTransform>();
+            contentRect.anchorMin = new Vector2(0f, 1f);
+            contentRect.anchorMax = new Vector2(0f, 1f);
+            contentRect.pivot = new Vector2(0f, 1f);
+            contentRect.anchoredPosition = Vector2.zero;
+            contentRect.sizeDelta = ResolveScrollContentSize(node);
+
+            scrollRect.viewport = viewportRect;
+            scrollRect.content = contentRect;
+        }
+
+        static void ConfigureListView(GameObject nodeObject, WebVisualNode node)
+        {
+            ConfigureScrollView(nodeObject, node);
+            var scrollRect = nodeObject.GetComponent<ScrollRect>();
+            var list = node.list ?? new WebVisualList();
+            var layout = NormalizeListLayout(list.layout);
+            ConfigureScrollDirection(scrollRect, list, layout);
+            EnsureComponent<ScrollRectElement>(nodeObject);
+
+            var content = scrollRect.content;
+            if (content == null)
+            {
+                return;
+            }
+
+            ApplyContentAnchors(content, layout, scrollRect);
+            ConfigureListLayout(content.gameObject, node, list, layout);
+        }
+
+        static void ConfigureTemplate(GameObject nodeObject, WebVisualNode node)
+        {
+            nodeObject.AddComponent<View>();
+        }
+
+        static void ConfigureListTemplateChild(GameObject nodeObject, WebVisualNode node, int childIndex)
+        {
+            if (!string.Equals(NormalizeElement(node.element), "ListView", StringComparison.Ordinal) || childIndex != 0)
+            {
+                return;
+            }
+
+            var content = nodeObject.transform.Find("Viewport/Content");
+            if (content == null || content.childCount == 0)
+            {
+                return;
+            }
+
+            var template = content.GetChild(0).gameObject;
+            if (template.GetComponent<View>() == null)
+            {
+                template.AddComponent<View>();
+            }
+
+            template.SetActive(false);
+        }
+
+        static void ConfigureScrollDirection(ScrollRect scrollRect, WebVisualList list, string layout)
+        {
+            var direction = (list.scrollDirection ?? string.Empty).Trim().ToLowerInvariant();
+            if (direction == "both")
+            {
+                scrollRect.horizontal = true;
+                scrollRect.vertical = true;
+                return;
+            }
+
+            if (direction == "horizontal" || layout == "horizontal")
+            {
+                scrollRect.horizontal = true;
+                scrollRect.vertical = false;
+                return;
+            }
+
+            scrollRect.horizontal = false;
+            scrollRect.vertical = true;
+        }
+
+        static void ConfigureListLayout(GameObject contentObject, WebVisualNode node, WebVisualList list, string layout)
+        {
+            switch (layout)
+            {
+                case "horizontal":
+                    ConfigureHorizontalLayout(contentObject, list);
+                    break;
+                case "grid":
+                    ConfigureGridLayout(contentObject, node, list);
+                    break;
+                case "mixed":
+                case "vertical":
+                default:
+                    ConfigureVerticalLayout(contentObject, list);
+                    break;
+            }
+        }
+
+        static void ConfigureVerticalLayout(GameObject contentObject, WebVisualList list)
+        {
+            var layout = EnsureComponent<VerticalLayoutGroup>(contentObject);
+            layout.padding = CreatePadding(list);
+            layout.spacing = list.spacingY;
+            layout.childAlignment = TextAnchor.UpperCenter;
+            layout.childControlWidth = false;
+            layout.childControlHeight = false;
+            layout.childForceExpandWidth = false;
+            layout.childForceExpandHeight = false;
+            var fitter = EnsureComponent<ContentSizeFitter>(contentObject);
+            fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        }
+
+        static void ConfigureHorizontalLayout(GameObject contentObject, WebVisualList list)
+        {
+            var layout = EnsureComponent<HorizontalLayoutGroup>(contentObject);
+            layout.padding = CreatePadding(list);
+            layout.spacing = list.spacingX;
+            layout.childAlignment = TextAnchor.MiddleLeft;
+            layout.childControlWidth = false;
+            layout.childControlHeight = false;
+            layout.childForceExpandWidth = false;
+            layout.childForceExpandHeight = false;
+            var fitter = EnsureComponent<ContentSizeFitter>(contentObject);
+            fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+            fitter.verticalFit = ContentSizeFitter.FitMode.Unconstrained;
+        }
+
+        static void ConfigureGridLayout(GameObject contentObject, WebVisualNode node, WebVisualList list)
+        {
+            var layout = EnsureComponent<GridLayoutGroup>(contentObject);
+            layout.padding = CreatePadding(list);
+            layout.spacing = new Vector2(list.spacingX, list.spacingY);
+            layout.startCorner = GridLayoutGroup.Corner.UpperLeft;
+            layout.startAxis = GridLayoutGroup.Axis.Horizontal;
+            layout.childAlignment = TextAnchor.UpperLeft;
+            layout.constraint = ParseGridConstraint(list.gridConstraint);
+            layout.constraintCount = Mathf.Max(1, list.gridCount == 0 ? 1 : list.gridCount);
+            layout.cellSize = ResolveGridCellSize(node, list);
+            var fitter = EnsureComponent<ContentSizeFitter>(contentObject);
+            fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        }
+
+        static void ApplyContentAnchors(RectTransform content, string layout, ScrollRect scrollRect)
+        {
+            if (layout == "horizontal" && scrollRect.horizontal && !scrollRect.vertical)
+            {
+                content.anchorMin = new Vector2(0f, 0.5f);
+                content.anchorMax = new Vector2(0f, 0.5f);
+                content.pivot = new Vector2(0f, 0.5f);
+                return;
+            }
+
+            content.anchorMin = new Vector2(0f, 1f);
+            content.anchorMax = new Vector2(0f, 1f);
+            content.pivot = new Vector2(0f, 1f);
+        }
+
+        static RectOffset CreatePadding(WebVisualList list)
+        {
+            return new RectOffset(
+                Mathf.RoundToInt(Mathf.Max(0f, list.paddingLeft)),
+                Mathf.RoundToInt(Mathf.Max(0f, list.paddingRight)),
+                Mathf.RoundToInt(Mathf.Max(0f, list.paddingTop)),
+                Mathf.RoundToInt(Mathf.Max(0f, list.paddingBottom)));
+        }
+
+        static GridLayoutGroup.Constraint ParseGridConstraint(string value)
+        {
+            var normalized = (value ?? string.Empty).Trim().ToLowerInvariant().Replace("-", string.Empty).Replace("_", string.Empty);
+            return normalized == "fixedrowcount" ? GridLayoutGroup.Constraint.FixedRowCount : GridLayoutGroup.Constraint.FixedColumnCount;
+        }
+
+        static Vector2 ResolveGridCellSize(WebVisualNode node, WebVisualList list)
+        {
+            if (list.cellWidth > 0f && list.cellHeight > 0f)
+            {
+                return new Vector2(list.cellWidth, list.cellHeight);
+            }
+
+            var template = node.children != null && node.children.Count > 0 ? node.children[0] : null;
+            if (template?.rect != null && template.rect.width > 0f && template.rect.height > 0f)
+            {
+                return new Vector2(template.rect.width, template.rect.height);
+            }
+
+            return new Vector2(Mathf.Max(1f, node.rect.width), Mathf.Max(1f, node.rect.height));
+        }
+
+        static string NormalizeListLayout(string layout)
+        {
+            var value = (layout ?? string.Empty).Trim().ToLowerInvariant().Replace("_", "-");
+            switch (value)
+            {
+                case "horizontal":
+                case "grid":
+                case "mixed":
+                    return value;
+                case "mixed-row":
+                    return "mixed";
+                case "vertical":
+                default:
+                    return "vertical";
+            }
+        }
+
+        static Vector2 ResolveScrollContentSize(WebVisualNode node)
+        {
+            var width = Mathf.Max(node.rect.width, node.style == null ? 0f : node.style.contentWidth);
+            var height = Mathf.Max(node.rect.height, node.style == null ? 0f : node.style.contentHeight);
+            if (node.children != null)
+            {
+                foreach (var child in node.children)
+                {
+                    if (child?.rect == null)
+                    {
+                        continue;
+                    }
+
+                    width = Mathf.Max(width, child.rect.x + child.rect.width - node.rect.x);
+                    height = Mathf.Max(height, child.rect.y + child.rect.height - node.rect.y);
+                }
+            }
+
+            return new Vector2(Mathf.Max(0f, width), Mathf.Max(0f, height));
         }
 
         static Text CreateTextChild(Transform parent, string name, WebVisualText text, bool center)
