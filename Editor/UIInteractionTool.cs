@@ -68,7 +68,7 @@ namespace FUI.Cli
             if (isOccluded)
             {
                 occlusionWarning = $"Warning: Element appears to be blocked by '{blockingElement.name}' (Layer: {blockingElement.layer}, Path: {GetGameObjectPath(blockingElement)}). Click simulation will proceed anyway.";
-                Debug.LogWarning($"[UIInteractionTool] {occlusionWarning}");
+                UnityEngine.Debug.LogWarning($"[UIInteractionTool] {occlusionWarning}");
             }
 
             var button = elementObject.GetComponent<Button>();
