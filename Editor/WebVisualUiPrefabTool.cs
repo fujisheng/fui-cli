@@ -264,6 +264,7 @@ namespace FUI.Cli
     {
         public string color = string.Empty;
         public string textColor = string.Empty;
+        public string sprite = string.Empty;
         public float alpha = 1f;
         public float opacity = 1f;
         public float borderRadius;
@@ -579,6 +580,18 @@ namespace FUI.Cli
             var image = EnsureComponent<Image>(nodeObject);
             image.color = ParseColor(style == null ? string.Empty : style.color, Color.white, ResolveAlpha(style));
             image.raycastTarget = raycastTarget;
+
+            var spritePath = style == null ? string.Empty : style.sprite;
+            if (!string.IsNullOrWhiteSpace(spritePath))
+            {
+                var sprite = AssetDatabase.LoadAssetAtPath<Sprite>(spritePath.Trim().Replace('\\', '/'));
+                if (sprite != null)
+                {
+                    image.sprite = sprite;
+                    image.type = Image.Type.Simple;
+                    image.preserveAspect = false;
+                }
+            }
         }
 
         static void ConfigureScrollView(GameObject nodeObject, WebVisualNode node)

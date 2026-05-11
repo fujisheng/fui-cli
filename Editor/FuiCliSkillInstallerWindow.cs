@@ -7,11 +7,11 @@ using UnityEngine;
 namespace FUI.Cli
 {
     /// <summary>
-    /// 把 FUI CLI 自带 skill 安装到当前项目 .opencode/skills。
+    /// 把 FUI CLI 自带 skill 安装到当前项目的 OpenCode 或 Codex skill 目录。
     /// </summary>
     public sealed class FuiCliSkillInstallerWindow : EditorWindow
     {
-        const string MenuPath = "FUI/Install OpenCode Skill";
+        const string MenuPath = "FUI/Install Skill";
 
         string statusMessage = string.Empty;
         MessageType statusType = MessageType.None;
@@ -20,30 +20,60 @@ namespace FUI.Cli
         public static void ShowWindow()
         {
             var window = GetWindow<FuiCliSkillInstallerWindow>();
-            window.titleContent = new GUIContent("FUI Skill");
-            window.minSize = new Vector2(480f, 180f);
+            window.titleContent = new GUIContent("FUI Skill Installer");
+            window.minSize = new Vector2(480f, 220f);
         }
 
         void OnGUI()
         {
-            EditorGUILayout.LabelField("FUI OpenCode Skill", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("FUI Skill Installer", EditorStyles.boldLabel);
             EditorGUILayout.Space(4f);
 
-            EditorGUILayout.HelpBox("把包内 Skill 复制到当前项目根目录 .opencode/skills，方便 OpenCode 直接使用。", MessageType.Info);
+            EditorGUILayout.HelpBox("把包内 Skill 复制到当前项目根目录，方便 AI 代理工具直接使用。", MessageType.Info);
 
             using (new EditorGUI.DisabledScope(false))
             {
                 EditorGUILayout.LabelField("来源", FuiCliSkillInstaller.GetPackageSkillsRoot());
-                EditorGUILayout.LabelField("目标", FuiCliSkillInstaller.GetProjectSkillsRoot());
             }
 
             EditorGUILayout.Space(8f);
-            if (GUILayout.Button("Install OpenCode Skill", GUILayout.Height(28f)))
+
+            // OpenCode 安装
+            EditorGUILayout.LabelField("OpenCode", EditorStyles.miniLabel);
+            using (new EditorGUI.DisabledScope(false))
+            {
+                EditorGUILayout.LabelField("目标", FuiCliSkillInstaller.GetOpenCodeSkillsRoot());
+            }
+
+            if (GUILayout.Button("Install to OpenCode", GUILayout.Height(28f)))
             {
                 if (FuiCliSkillInstaller.TryInstallSkills(out var result))
                 {
                     statusType = MessageType.Info;
-                    statusMessage = $"已复制 {result.copiedFileCount} 个文件到 {result.destinationPath}";
+                    statusMessage = $"[OpenCode] 已复制 {result.copiedFileCount} 个文件到 {result.destinationPath}";
+                }
+                else
+                {
+                    statusType = MessageType.Error;
+                    statusMessage = result.errorMessage;
+                }
+            }
+
+            EditorGUILayout.Space(8f);
+
+            // Codex 安装
+            EditorGUILayout.LabelField("Codex", EditorStyles.miniLabel);
+            using (new EditorGUI.DisabledScope(false))
+            {
+                EditorGUILayout.LabelField("目标", FuiCliSkillInstaller.GetCodexSkillsRoot());
+            }
+
+            if (GUILayout.Button("Install to Codex", GUILayout.Height(28f)))
+            {
+                if (FuiCliSkillInstaller.TryInstallCodexSkills(out var result))
+                {
+                    statusType = MessageType.Info;
+                    statusMessage = $"[Codex] 已复制 {result.copiedFileCount} 个文件到 {result.destinationPath}";
                 }
                 else
                 {
@@ -62,19 +92,55 @@ namespace FUI.Cli
 
     public static class FuiCliSkillInstaller
     {
+        const string PackageName = "com.fujisheng.fui.cli";
+
+        static string cachedPackageSkillsRoot;
+
+        /// <summary>
+        /// 通过 PackageInfo 解析包的实际磁盘路径，兼容本地/Git URL 等安装方式。
+        /// </summary>
         public static string GetPackageSkillsRoot()
         {
-            return NormalizePath(Path.Combine(GetProjectRoot(), "Packages", "com.fujisheng.fui.cli", "Skills"));
+            if (cachedPackageSkillsRoot != null)
+            {
+                return cachedPackageSkillsRoot;
+            }
+
+            var packageInfo = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(FuiCliSkillInstaller).Assembly);
+            if (packageInfo != null)
+            {
+                cachedPackageSkillsRoot = NormalizePath(Path.Combine(packageInfo.resolvedPath, "Skills"));
+                return cachedPackageSkillsRoot;
+            }
+
+            // 兜底：直接拼 Packages 路径（仅本地嵌入包有效）
+            cachedPackageSkillsRoot = NormalizePath(Path.Combine(GetProjectRoot(), "Packages", PackageName, "Skills"));
+            return cachedPackageSkillsRoot;
         }
 
-        public static string GetProjectSkillsRoot()
+        /// <summary>OpenCode 项目级 skill 目标路径。</summary>
+        public static string GetOpenCodeSkillsRoot()
         {
             return NormalizePath(Path.Combine(GetProjectRoot(), ".opencode", "skills"));
         }
 
+        /// <summary>Codex 项目级 skill 目标路径。</summary>
+        public static string GetCodexSkillsRoot()
+        {
+            return NormalizePath(Path.Combine(GetProjectRoot(), ".agents", "skills"));
+        }
+
+        [Obsolete("Use GetOpenCodeSkillsRoot() instead.")]
+        public static string GetProjectSkillsRoot() => GetOpenCodeSkillsRoot();
+
         public static bool TryInstallSkills(out SkillInstallResult result)
         {
-            return TryCopySkills(GetPackageSkillsRoot(), GetProjectSkillsRoot(), out result);
+            return TryCopySkills(GetPackageSkillsRoot(), GetOpenCodeSkillsRoot(), out result);
+        }
+
+        public static bool TryInstallCodexSkills(out SkillInstallResult result)
+        {
+            return TryCopySkills(GetPackageSkillsRoot(), GetCodexSkillsRoot(), out result);
         }
 
         public static bool TryCopySkills(string sourceRoot, string destinationRoot, out SkillInstallResult result)

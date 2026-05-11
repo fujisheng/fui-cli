@@ -188,6 +188,7 @@ const plan = await page.evaluate(({ width, height, viewName }) => {
         style: {
           color: rgbToHex(backgroundColor),
           textColor: rgbToHex(color),
+          sprite: element.dataset.uiSprite || '',
           alpha: clamp(alphaFromColor(backgroundColor, style.opacity)),
           opacity: clamp(toNumber(style.opacity) || 1),
           borderRadius: clamp(toNumber(style.borderTopLeftRadius)),
