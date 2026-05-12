@@ -56,3 +56,13 @@ uiManager.Open("SampleView");
 - 固定业务页面流转
 
 只要你的工程满足 `viewName -> prefab -> IViewFactory -> UIManager` 这条链，就能接入 FUI CLI。
+
+## PlayMode 运行态验证流程
+
+```text
+1. 确认 Unity Editor 稳定：ping -> editor.status -> console
+2. 进入 PlayMode 并打开目标视图
+3. 用 ui_list_open_views / ui_inspect_view / ui_get_bindings 检查运行态结构
+4. 用 ui_input_text / ui_click_element / 其他交互工具验证关键行为
+5. 用 ui_diagnose_bindings / ui_diagnose_layout / ui_diagnose_text / console 排查问题
+```

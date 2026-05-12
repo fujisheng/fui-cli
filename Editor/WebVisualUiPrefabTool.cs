@@ -220,6 +220,9 @@ namespace FUI.Cli
         public WebVisualText text = new WebVisualText();
         public WebVisualList list = new WebVisualList();
         public WebVisualTemplate template = new WebVisualTemplate();
+        public WebVisualSlider slider = new WebVisualSlider();
+        public WebVisualDropdown dropdown = new WebVisualDropdown();
+        public WebVisualScrollbar scrollbar = new WebVisualScrollbar();
         public List<WebVisualNode> children = new List<WebVisualNode>();
     }
 
@@ -231,6 +234,8 @@ namespace FUI.Cli
         public string itemView = string.Empty;
         public string rowView = string.Empty;
         public string scrollDirection = string.Empty;
+        public string scrollMovement = string.Empty;
+        public string scrollInertia = string.Empty;
         public string gridConstraint = string.Empty;
         public int gridCount;
         public float cellWidth;
@@ -251,6 +256,31 @@ namespace FUI.Cli
     }
 
     [Serializable]
+    public sealed class WebVisualSlider
+    {
+        public float minValue;
+        public float maxValue = 1f;
+        public float value;
+        public string direction = string.Empty;
+        public string wholeNumbers = string.Empty;
+    }
+
+    [Serializable]
+    public sealed class WebVisualDropdown
+    {
+        public string options = string.Empty;
+        public int value;
+    }
+
+    [Serializable]
+    public sealed class WebVisualScrollbar
+    {
+        public string direction = string.Empty;
+        public float size = 1f;
+        public float value;
+    }
+
+    [Serializable]
     public sealed class WebVisualRect
     {
         public float x;
@@ -265,6 +295,7 @@ namespace FUI.Cli
         public string color = string.Empty;
         public string textColor = string.Empty;
         public string sprite = string.Empty;
+        public string imageType = string.Empty;
         public float alpha = 1f;
         public float opacity = 1f;
         public float borderRadius;
@@ -280,6 +311,9 @@ namespace FUI.Cli
         public string fontWeight = string.Empty;
         public string color = string.Empty;
         public string alignment = string.Empty;
+        public string overflow = string.Empty;
+        public string truncate = string.Empty;
+        public string bestFit = string.Empty;
     }
 
     sealed class WebVisualPrefabResult
@@ -329,7 +363,7 @@ namespace FUI.Cli
 
                 foreach (var node in GetRootChildren(plan))
                 {
-                    CreateNode(root.transform, node, rootRect, result, string.Empty);
+                    CreateNode(root.transform, node, rootRect, result, string.Empty, dryRun);
                 }
 
                 BuildHierarchy(root.transform, 0, result.hierarchy);
@@ -406,7 +440,7 @@ namespace FUI.Cli
             return plan.nodes;
         }
 
-        static void CreateNode(Transform parent, WebVisualNode node, WebVisualRect parentRect, WebVisualPrefabResult result, string parentPath)
+        static void CreateNode(Transform parent, WebVisualNode node, WebVisualRect parentRect, WebVisualPrefabResult result, string parentPath, bool dryRun)
         {
             if (node == null)
             {
@@ -419,7 +453,7 @@ namespace FUI.Cli
             var nodeObject = new GameObject(nodeName, typeof(RectTransform));
             nodeObject.transform.SetParent(parent, false);
             ApplyRect(nodeObject.GetComponent<RectTransform>(), node.rect, parentRect);
-            ApplyElement(nodeObject, node, result, nodePath);
+            ApplyElement(nodeObject, node, result, nodePath, dryRun);
 
             result.nodeCount++;
             var element = NormalizeElement(node.element);
@@ -438,10 +472,12 @@ namespace FUI.Cli
             var childIndex = 0;
             foreach (var child in ResolveChildrenToCreate(node, result, nodePath))
             {
-                CreateNode(childParent, child, childParentRect, result, nodePath);
+                CreateNode(childParent, child, childParentRect, result, nodePath, dryRun);
                 ConfigureListTemplateChild(nodeObject, node, childIndex);
                 childIndex++;
             }
+
+            ConfigureCompositeControlChildren(nodeObject, node);
         }
 
         static IEnumerable<WebVisualNode> ResolveChildrenToCreate(WebVisualNode node, WebVisualPrefabResult result, string nodePath)
@@ -481,7 +517,7 @@ namespace FUI.Cli
             rectTransform.localScale = Vector3.one;
         }
 
-        static void ApplyElement(GameObject nodeObject, WebVisualNode node, WebVisualPrefabResult result, string nodePath)
+        static void ApplyElement(GameObject nodeObject, WebVisualNode node, WebVisualPrefabResult result, string nodePath, bool dryRun)
         {
             var element = NormalizeElement(node.element);
             switch (element)
@@ -489,7 +525,7 @@ namespace FUI.Cli
                 case "Container":
                     if (!string.IsNullOrWhiteSpace(node.style?.color))
                     {
-                        ConfigureImage(nodeObject, node.style, false);
+                        ConfigureImage(nodeObject, node.style, false, result, nodePath, dryRun);
                     }
                     break;
                 case "ScrollView":
@@ -505,7 +541,7 @@ namespace FUI.Cli
                     ConfigureText(nodeObject, node.text, node.style, false);
                     break;
                 case "ButtonElement":
-                    ConfigureImage(nodeObject, node.style, true);
+                    ConfigureImage(nodeObject, node.style, true, result, nodePath, dryRun);
                     var button = EnsureComponent<Button>(nodeObject);
                     button.targetGraphic = nodeObject.GetComponent<Image>();
                     EnsureComponent<ImageElement>(nodeObject);
@@ -513,7 +549,7 @@ namespace FUI.Cli
                     CreateTextChild(nodeObject.transform, "Label", node.text, true);
                     break;
                 case "InputFieldElement":
-                    ConfigureImage(nodeObject, node.style, true);
+                    ConfigureImage(nodeObject, node.style, true, result, nodePath, dryRun);
                     var inputField = EnsureComponent<InputField>(nodeObject);
                     EnsureComponent<InputFieldElement>(nodeObject);
                     var inputText = CreateTextChild(nodeObject.transform, "Text", node.text, false);
@@ -521,15 +557,24 @@ namespace FUI.Cli
                     inputField.text = node.text == null ? string.Empty : node.text.content ?? string.Empty;
                     break;
                 case "ToggleElement":
-                    ConfigureImage(nodeObject, node.style, true);
+                    ConfigureImage(nodeObject, node.style, true, result, nodePath, dryRun);
                     var toggle = EnsureComponent<Toggle>(nodeObject);
                     toggle.targetGraphic = nodeObject.GetComponent<Image>();
                     EnsureComponent<ImageElement>(nodeObject);
                     EnsureComponent<ToggleElement>(nodeObject);
                     break;
+                case "SliderElement":
+                    ConfigureSlider(nodeObject, node, result, nodePath, dryRun);
+                    break;
+                case "DropdownElement":
+                    ConfigureDropdown(nodeObject, node, result, nodePath, dryRun);
+                    break;
+                case "ScrollbarElement":
+                    ConfigureScrollbar(nodeObject, node, result, nodePath, dryRun);
+                    break;
                 case "ImageElement":
                 default:
-                    ConfigureImage(nodeObject, node.style, true);
+                    ConfigureImage(nodeObject, node.style, true, result, nodePath, dryRun);
                     EnsureComponent<ImageElement>(nodeObject);
                     break;
             }
@@ -575,32 +620,134 @@ namespace FUI.Cli
             return element.Trim();
         }
 
-        static void ConfigureImage(GameObject nodeObject, WebVisualStyle style, bool raycastTarget)
+        static void ConfigureImage(GameObject nodeObject, WebVisualStyle style, bool raycastTarget, WebVisualPrefabResult result, string nodePath, bool dryRun)
         {
             var image = EnsureComponent<Image>(nodeObject);
             image.color = ParseColor(style == null ? string.Empty : style.color, Color.white, ResolveAlpha(style));
             image.raycastTarget = raycastTarget;
+            image.type = ParseImageType(style == null ? string.Empty : style.imageType);
 
-            var spritePath = style == null ? string.Empty : style.sprite;
+            var spritePath = NormalizeAssetPath(style == null ? string.Empty : style.sprite);
             if (!string.IsNullOrWhiteSpace(spritePath))
             {
-                var sprite = AssetDatabase.LoadAssetAtPath<Sprite>(spritePath.Trim().Replace('\\', '/'));
+                ValidateOrUpdateSpriteImporter(spritePath, style, result, nodePath, dryRun);
+                var sprite = AssetDatabase.LoadAssetAtPath<Sprite>(spritePath);
                 if (sprite != null)
                 {
                     image.sprite = sprite;
-                    image.type = Image.Type.Simple;
                     image.preserveAspect = false;
                 }
+                else if (dryRun && AssetImporter.GetAtPath(spritePath) is TextureImporter)
+                {
+                    result.warnings.Add(WebVisualPrefabIssue.Create("sprite_importer_required", $"dry-run 未写入导入设置；正式生成时会尝试导入 Sprite: {spritePath}。", nodePath));
+                }
+                else
+                {
+                    result.ok = false;
+                    result.issues.Add(WebVisualPrefabIssue.Create("sprite_not_found", $"找不到可用 Sprite: {spritePath}。", nodePath));
+                }
             }
+        }
+
+        static void ValidateOrUpdateSpriteImporter(string spritePath, WebVisualStyle style, WebVisualPrefabResult result, string nodePath, bool dryRun)
+        {
+            var importer = AssetImporter.GetAtPath(spritePath) as TextureImporter;
+            if (importer == null)
+            {
+                return;
+            }
+
+            var imageType = ParseImageType(style == null ? string.Empty : style.imageType);
+            if (dryRun)
+            {
+                if (importer.textureType != TextureImporterType.Sprite)
+                {
+                    result.warnings.Add(WebVisualPrefabIssue.Create("sprite_importer_would_update", $"正式生成时会把资源导入为 Sprite: {spritePath}。", nodePath));
+                }
+
+                if (imageType == Image.Type.Sliced && importer.spriteBorder == Vector4.zero && ResolveSpriteBorder(style) == Vector4.zero)
+                {
+                    result.warnings.Add(WebVisualPrefabIssue.Create("sliced_sprite_border_missing", $"sliced 资源缺少 Sprite border: {spritePath}。", nodePath));
+                }
+
+                return;
+            }
+
+            var changed = false;
+            if (importer.textureType != TextureImporterType.Sprite)
+            {
+                importer.textureType = TextureImporterType.Sprite;
+                changed = true;
+            }
+
+            if (importer.spriteImportMode != SpriteImportMode.Single)
+            {
+                importer.spriteImportMode = SpriteImportMode.Single;
+                changed = true;
+            }
+
+            if (!importer.alphaIsTransparency)
+            {
+                importer.alphaIsTransparency = true;
+                changed = true;
+            }
+
+            if (imageType == Image.Type.Sliced)
+            {
+                var border = ResolveSpriteBorder(style);
+                if (border != Vector4.zero && importer.spriteBorder != border)
+                {
+                    importer.spriteBorder = border;
+                    changed = true;
+                }
+                else if (border == Vector4.zero && importer.spriteBorder == Vector4.zero)
+                {
+                    result.warnings.Add(WebVisualPrefabIssue.Create("sliced_sprite_border_missing", $"sliced 资源缺少 Sprite border: {spritePath}。", nodePath));
+                }
+            }
+
+            if (changed)
+            {
+                importer.SaveAndReimport();
+            }
+        }
+
+        static Vector4 ResolveSpriteBorder(WebVisualStyle style)
+        {
+            if (style == null || style.borderRadius <= 0f)
+            {
+                return Vector4.zero;
+            }
+
+            var horizontal = style.borderRadius;
+            if (style.contentWidth > 0f)
+            {
+                horizontal = Mathf.Min(horizontal, style.contentWidth * 0.5f);
+            }
+
+            var vertical = style.borderRadius;
+            if (style.contentHeight > 0f)
+            {
+                vertical = Mathf.Min(vertical, style.contentHeight * 0.5f);
+            }
+
+            horizontal = Mathf.Max(1f, horizontal);
+            vertical = Mathf.Max(1f, vertical);
+            return new Vector4(horizontal, vertical, horizontal, vertical);
+        }
+
+        static string NormalizeAssetPath(string rawPath)
+        {
+            return string.IsNullOrWhiteSpace(rawPath) ? string.Empty : rawPath.Trim().Replace('\\', '/');
         }
 
         static void ConfigureScrollView(GameObject nodeObject, WebVisualNode node)
         {
             var scrollRect = EnsureComponent<ScrollRect>(nodeObject);
-            scrollRect.horizontal = false;
-            scrollRect.vertical = true;
-            scrollRect.movementType = ScrollRect.MovementType.Clamped;
-            scrollRect.inertia = true;
+            var list = node.list ?? new WebVisualList();
+            var layout = NormalizeListLayout(list.layout);
+            ConfigureScrollDirection(scrollRect, list, layout);
+            ConfigureScrollBehavior(scrollRect, list);
             scrollRect.scrollSensitivity = 40f;
 
             var viewportObject = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(Mask));
@@ -630,6 +777,51 @@ namespace FUI.Cli
 
             scrollRect.viewport = viewportRect;
             scrollRect.content = contentRect;
+        }
+
+        static void ConfigureSlider(GameObject nodeObject, WebVisualNode node, WebVisualPrefabResult result, string nodePath, bool dryRun)
+        {
+            ConfigureImage(nodeObject, node.style, true, result, nodePath, dryRun);
+            var slider = EnsureComponent<Slider>(nodeObject);
+            var data = node.slider ?? new WebVisualSlider();
+            slider.minValue = data.minValue;
+            slider.maxValue = data.maxValue <= data.minValue ? data.minValue + 1f : data.maxValue;
+            slider.wholeNumbers = ParseBoolean(data.wholeNumbers, false);
+            slider.direction = ParseSliderDirection(data.direction);
+            slider.value = Mathf.Clamp(data.value, slider.minValue, slider.maxValue);
+            slider.targetGraphic = nodeObject.GetComponent<Image>();
+            EnsureComponent<ImageElement>(nodeObject);
+            EnsureComponent<SliderElement>(nodeObject);
+        }
+
+        static void ConfigureDropdown(GameObject nodeObject, WebVisualNode node, WebVisualPrefabResult result, string nodePath, bool dryRun)
+        {
+            ConfigureImage(nodeObject, node.style, true, result, nodePath, dryRun);
+            var dropdown = EnsureComponent<Dropdown>(nodeObject);
+            dropdown.targetGraphic = nodeObject.GetComponent<Image>();
+            dropdown.options.Clear();
+            foreach (var option in ParseDropdownOptions(node.dropdown == null ? string.Empty : node.dropdown.options))
+            {
+                dropdown.options.Add(new Dropdown.OptionData(option));
+            }
+
+            dropdown.value = Mathf.Clamp(node.dropdown == null ? 0 : node.dropdown.value, 0, Mathf.Max(0, dropdown.options.Count - 1));
+            dropdown.RefreshShownValue();
+            EnsureComponent<ImageElement>(nodeObject);
+            EnsureComponent<DropdownElement>(nodeObject);
+        }
+
+        static void ConfigureScrollbar(GameObject nodeObject, WebVisualNode node, WebVisualPrefabResult result, string nodePath, bool dryRun)
+        {
+            ConfigureImage(nodeObject, node.style, true, result, nodePath, dryRun);
+            var scrollbar = EnsureComponent<Scrollbar>(nodeObject);
+            var data = node.scrollbar ?? new WebVisualScrollbar();
+            scrollbar.direction = ParseScrollbarDirection(data.direction);
+            scrollbar.size = NormalizeScrollbarSize(data.size, node.rect, scrollbar.direction);
+            scrollbar.value = Mathf.Clamp01(data.value);
+            scrollbar.targetGraphic = nodeObject.GetComponent<Image>();
+            EnsureComponent<ImageElement>(nodeObject);
+            EnsureComponent<ScrollbarElement>(nodeObject);
         }
 
         static void ConfigureListView(GameObject nodeObject, WebVisualNode node)
@@ -678,6 +870,96 @@ namespace FUI.Cli
             template.SetActive(false);
         }
 
+        static void ConfigureCompositeControlChildren(GameObject nodeObject, WebVisualNode node)
+        {
+            var element = NormalizeElement(node.element);
+            switch (element)
+            {
+                case "SliderElement":
+                    ConfigureSliderChildReferences(nodeObject);
+                    break;
+                case "DropdownElement":
+                    ConfigureDropdownChildReferences(nodeObject);
+                    break;
+                case "ScrollbarElement":
+                    ConfigureScrollbarChildReferences(nodeObject);
+                    break;
+            }
+        }
+
+        static void ConfigureSliderChildReferences(GameObject nodeObject)
+        {
+            var slider = nodeObject.GetComponent<Slider>();
+            if (slider == null)
+            {
+                return;
+            }
+
+            var fillRect = FindDescendantRect(nodeObject.transform, "fill");
+            if (fillRect != null)
+            {
+                slider.fillRect = fillRect;
+            }
+
+            var handleRect = FindDescendantRect(nodeObject.transform, "handle", "knob");
+            if (handleRect != null)
+            {
+                slider.handleRect = handleRect;
+                var graphic = handleRect.GetComponent<Graphic>();
+                if (graphic != null)
+                {
+                    slider.targetGraphic = graphic;
+                }
+            }
+        }
+
+        static void ConfigureDropdownChildReferences(GameObject nodeObject)
+        {
+            var dropdown = nodeObject.GetComponent<Dropdown>();
+            if (dropdown == null)
+            {
+                return;
+            }
+
+            var captionText = FindDescendantComponent<Text>(nodeObject.transform, "label", "caption", "text");
+            if (captionText == null && dropdown.options.Count > 0)
+            {
+                var selectedIndex = Mathf.Clamp(dropdown.value, 0, dropdown.options.Count - 1);
+                var selectedText = dropdown.options[selectedIndex].text;
+                captionText = CreateTextChild(nodeObject.transform, "Label", new WebVisualText
+                {
+                    content = selectedText,
+                    fontSize = 16f,
+                    alignment = "center"
+                }, false);
+            }
+
+            dropdown.captionText = captionText;
+            dropdown.RefreshShownValue();
+        }
+
+        static void ConfigureScrollbarChildReferences(GameObject nodeObject)
+        {
+            var scrollbar = nodeObject.GetComponent<Scrollbar>();
+            if (scrollbar == null)
+            {
+                return;
+            }
+
+            var handleRect = FindDescendantRect(nodeObject.transform, "handle", "thumb");
+            if (handleRect == null)
+            {
+                return;
+            }
+
+            scrollbar.handleRect = handleRect;
+            var graphic = handleRect.GetComponent<Graphic>();
+            if (graphic != null)
+            {
+                scrollbar.targetGraphic = graphic;
+            }
+        }
+
         static void ConfigureScrollDirection(ScrollRect scrollRect, WebVisualList list, string layout)
         {
             var direction = (list.scrollDirection ?? string.Empty).Trim().ToLowerInvariant();
@@ -697,6 +979,27 @@ namespace FUI.Cli
 
             scrollRect.horizontal = false;
             scrollRect.vertical = true;
+        }
+
+        static void ConfigureScrollBehavior(ScrollRect scrollRect, WebVisualList list)
+        {
+            var movement = (list.scrollMovement ?? string.Empty).Trim().ToLowerInvariant();
+            switch (movement)
+            {
+                case "elastic":
+                    scrollRect.movementType = ScrollRect.MovementType.Elastic;
+                    break;
+                case "unrestricted":
+                    scrollRect.movementType = ScrollRect.MovementType.Unrestricted;
+                    break;
+                case "clamped":
+                case "":
+                default:
+                    scrollRect.movementType = ScrollRect.MovementType.Clamped;
+                    break;
+            }
+
+            scrollRect.inertia = ParseBoolean(list.scrollInertia, true);
         }
 
         static void ConfigureListLayout(GameObject contentObject, WebVisualNode node, WebVisualList list, string layout)
@@ -867,11 +1170,107 @@ namespace FUI.Cli
             textComponent.fontSize = Mathf.Max(1, Mathf.RoundToInt(text == null ? 16f : text.fontSize));
             textComponent.color = ParseColor(ResolveTextColor(text, style), Color.white, 1f);
             textComponent.alignment = forceCenter ? TextAnchor.MiddleCenter : ParseTextAnchor(text == null ? string.Empty : text.alignment);
+            textComponent.fontStyle = ParseFontStyle(text == null ? string.Empty : text.fontWeight);
+            ApplyTextOverflow(textComponent, text);
+            ApplyTextBestFit(textComponent, text);
             textComponent.raycastTarget = false;
             textComponent.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             EnsureComponent<LegacyTextAdapter>(nodeObject);
             EnsureComponent<TextElement>(nodeObject);
             return textComponent;
+        }
+
+        static void ApplyTextOverflow(Text textComponent, WebVisualText text)
+        {
+            if (text == null)
+            {
+                return;
+            }
+
+            var overflow = (text.overflow ?? string.Empty).Trim().ToLowerInvariant();
+            if (overflow == "wrap")
+            {
+                textComponent.horizontalOverflow = HorizontalWrapMode.Wrap;
+            }
+            else if (overflow == "overflow")
+            {
+                textComponent.horizontalOverflow = HorizontalWrapMode.Overflow;
+            }
+
+            var truncate = (text.truncate ?? string.Empty).Trim().ToLowerInvariant();
+            if (truncate == "truncate")
+            {
+                textComponent.verticalOverflow = VerticalWrapMode.Truncate;
+            }
+            else if (truncate == "overflow")
+            {
+                textComponent.verticalOverflow = VerticalWrapMode.Overflow;
+            }
+        }
+
+        static void ApplyTextBestFit(Text textComponent, WebVisualText text)
+        {
+            var value = text == null ? string.Empty : text.bestFit ?? string.Empty;
+            value = value.Trim().ToLowerInvariant();
+            if (string.IsNullOrEmpty(value))
+            {
+                return;
+            }
+
+            if (value == "false" || value == "0")
+            {
+                textComponent.resizeTextForBestFit = false;
+                return;
+            }
+
+            textComponent.resizeTextForBestFit = true;
+            textComponent.resizeTextMinSize = 1;
+            textComponent.resizeTextMaxSize = Mathf.Max(1, textComponent.fontSize);
+            if (value == "true" || value == "1")
+            {
+                return;
+            }
+
+            var separators = new[] { '-', ',', '，', ':', '~' };
+            var parts = value.Split(separators, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 1 && int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var maxSize))
+            {
+                maxSize = Mathf.Max(1, maxSize);
+                if (textComponent.fontSize > maxSize)
+                {
+                    textComponent.fontSize = maxSize;
+                }
+
+                textComponent.resizeTextMaxSize = maxSize;
+                return;
+            }
+
+            if (parts.Length < 2
+                || !int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var min)
+                || !int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var max))
+            {
+                return;
+            }
+
+            textComponent.resizeTextMinSize = Mathf.Max(1, Mathf.Min(min, max));
+            var resolvedMax = Mathf.Max(textComponent.resizeTextMinSize, Mathf.Max(min, max));
+            if (textComponent.fontSize > resolvedMax)
+            {
+                textComponent.fontSize = resolvedMax;
+            }
+
+            textComponent.resizeTextMaxSize = resolvedMax;
+        }
+
+        static FontStyle ParseFontStyle(string fontWeight)
+        {
+            if (int.TryParse((fontWeight ?? string.Empty).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var numericWeight))
+            {
+                return numericWeight >= 700 ? FontStyle.Bold : FontStyle.Normal;
+            }
+
+            var value = (fontWeight ?? string.Empty).Trim().ToLowerInvariant();
+            return value == "bold" || value == "bolder" ? FontStyle.Bold : FontStyle.Normal;
         }
 
         static string ResolveTextColor(WebVisualText text, WebVisualStyle style)
@@ -903,6 +1302,177 @@ namespace FUI.Cli
                 default:
                     return TextAnchor.MiddleLeft;
             }
+        }
+
+        static Image.Type ParseImageType(string imageType)
+        {
+            var value = (imageType ?? string.Empty).Trim().ToLowerInvariant();
+            switch (value)
+            {
+                case "sliced":
+                    return Image.Type.Sliced;
+                case "tiled":
+                    return Image.Type.Tiled;
+                case "filled":
+                    return Image.Type.Filled;
+                case "simple":
+                case "":
+                default:
+                    return Image.Type.Simple;
+            }
+        }
+
+        static Slider.Direction ParseSliderDirection(string direction)
+        {
+            var value = NormalizeEnumLikeValue(direction);
+            switch (value)
+            {
+                case "righttoleft":
+                    return Slider.Direction.RightToLeft;
+                case "bottomtotop":
+                    return Slider.Direction.BottomToTop;
+                case "toptobottom":
+                    return Slider.Direction.TopToBottom;
+                case "lefttoright":
+                default:
+                    return Slider.Direction.LeftToRight;
+            }
+        }
+
+        static Scrollbar.Direction ParseScrollbarDirection(string direction)
+        {
+            var value = NormalizeEnumLikeValue(direction);
+            switch (value)
+            {
+                case "horizontal":
+                case "lefttoright":
+                    return Scrollbar.Direction.LeftToRight;
+                case "righttoleft":
+                    return Scrollbar.Direction.RightToLeft;
+                case "vertical":
+                case "bottomtotop":
+                    return Scrollbar.Direction.BottomToTop;
+                case "toptobottom":
+                    return Scrollbar.Direction.TopToBottom;
+                default:
+                    return Scrollbar.Direction.LeftToRight;
+            }
+        }
+
+        static string NormalizeEnumLikeValue(string value)
+        {
+            return (value ?? string.Empty)
+                .Trim()
+                .ToLowerInvariant()
+                .Replace("-", string.Empty)
+                .Replace("_", string.Empty)
+                .Replace(" ", string.Empty);
+        }
+
+        static bool ParseBoolean(string value, bool fallback)
+        {
+            var normalized = (value ?? string.Empty).Trim().ToLowerInvariant();
+            switch (normalized)
+            {
+                case "true":
+                case "1":
+                case "yes":
+                    return true;
+                case "false":
+                case "0":
+                case "no":
+                    return false;
+                case "":
+                default:
+                    return fallback;
+            }
+        }
+
+        static IEnumerable<string> ParseDropdownOptions(string options)
+        {
+            var separators = new[] { ',', '，', '|', '\n', '\r' };
+            foreach (var part in (options ?? string.Empty).Split(separators, StringSplitOptions.RemoveEmptyEntries))
+            {
+                var value = part.Trim();
+                if (!string.IsNullOrEmpty(value))
+                {
+                    yield return value;
+                }
+            }
+        }
+
+        static float NormalizeScrollbarSize(float value, WebVisualRect rect, Scrollbar.Direction direction)
+        {
+            if (value <= 0f)
+            {
+                return 0f;
+            }
+
+            if (value <= 1f)
+            {
+                return Mathf.Clamp01(value);
+            }
+
+            var vertical = direction == Scrollbar.Direction.BottomToTop || direction == Scrollbar.Direction.TopToBottom;
+            var trackSize = vertical ? rect.height : rect.width;
+            if (trackSize <= 0f)
+            {
+                return 1f;
+            }
+
+            return Mathf.Clamp01(value / trackSize);
+        }
+
+        static RectTransform FindDescendantRect(Transform root, params string[] nameTokens)
+        {
+            var transform = FindDescendant(root, nameTokens);
+            return transform == null ? null : transform.GetComponent<RectTransform>();
+        }
+
+        static T FindDescendantComponent<T>(Transform root, params string[] nameTokens) where T : Component
+        {
+            var transform = FindDescendant(root, nameTokens);
+            return transform == null ? null : transform.GetComponent<T>();
+        }
+
+        static Transform FindDescendant(Transform root, params string[] nameTokens)
+        {
+            if (root == null)
+            {
+                return null;
+            }
+
+            for (var index = 0; index < root.childCount; index++)
+            {
+                var child = root.GetChild(index);
+                if (NameContainsAny(child.name, nameTokens))
+                {
+                    return child;
+                }
+
+                var nested = FindDescendant(child, nameTokens);
+                if (nested != null)
+                {
+                    return nested;
+                }
+            }
+
+            return null;
+        }
+
+        static bool NameContainsAny(string name, params string[] tokens)
+        {
+            var normalizedName = (name ?? string.Empty).ToLowerInvariant();
+            foreach (var token in tokens)
+            {
+                var normalizedToken = (token ?? string.Empty).ToLowerInvariant();
+                if (!string.IsNullOrEmpty(normalizedToken) && normalizedName.Contains(normalizedToken))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         static float ResolveAlpha(WebVisualStyle style)

@@ -144,7 +144,7 @@ AI Agent 不直接操作 Unity Editor，而是通过 **结构化工具调用** �
 ```text
 用户输入需求
     ↓
-AI 分析需求，确定设计分辨率
+AI 从原型 HTML 显式声明确定设计分辨率
     ↓
 AI 生成 Web 原型（HTML/CSS）
     ↓
@@ -285,7 +285,7 @@ FUI CLI 为 AI Agent 提供了专门的 **Skill 文档**，位于 `Skills/fui-cl
 3. **不要手写具体 `BindingContext`**，交给 FUI SourceGenerator
 4. **禁止手写 `visual-ui.json`**，只能由固定提取脚本从 Web DOM 生成
 5. **Web 原型只标记 UI 节点**，背景/角色/装饰不加 `data-ui-id`
-6. **设计分辨率未知时必须先问用户**，不自行选择默认值
+6. **设计分辨率必须写在原型 HTML 中**，不从浏览器窗口、截图尺寸或默认值推断
 
 ---
 

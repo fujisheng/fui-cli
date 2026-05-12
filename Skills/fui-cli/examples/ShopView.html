@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="fui-design-resolution" content="750x1334">
+  <meta name="viewport" content="width=750, height=1334, initial-scale=1">
+  <title>ShopView - 布局定位参考</title>
+  <style>
+    * { box-sizing: border-box; user-select: none; }
+    html, body {
+      width: 750px;
+      height: 1334px;
+      margin: 0;
+      overflow: hidden;
+      background-color: #0D1424;
+      font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    }
+    button {
+      padding: 0;
+      border: 0;
+      font: inherit;
+      color: inherit;
+      background-color: transparent;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<!--
+  Layout Probe 参考页
+
+  目标：
+  - 覆盖 Container / Panel / Image / Text / Button / Input / Toggle / ListView / Grid / Template / ScrollView / Slider / Dropdown / Scrollbar
+  - 覆盖 text overflow / best fit / list metadata / grid metadata / scroll metadata / slider / dropdown / scrollbar 参数
+  - 所有 data-ui-id 节点都使用纯色矩形，不使用 data-ui-sprite、图片、渐变、阴影、圆角、动画
+  - 非提取参考层不加 data-ui-id
+-->
+
+<!-- 视觉参考层：安全区提示，不进入 prefab -->
+<div style="position: absolute; left: 0; top: 0; width: 750px; height: 60px; background-color: rgba(255, 255, 255, 0.04);"></div>
+<div style="position: absolute; left: 0; top: 1294px; width: 750px; height: 40px; background-color: rgba(255, 255, 255, 0.04);"></div>
+
+<div id="ShopView" data-ui-id="ShopView" data-ui-type="Container"
+     data-design-width="750" data-design-height="1334"
+     style="position: relative; width: 750px; height: 1334px; background-color: #0D1424;">
+
+  <!-- 1. 背景层：Image + imageType -->
+  <div data-ui-id="BackgroundBlock" data-ui-type="Image" data-image-type="simple"
+       style="position: absolute; left: 0; top: 0; width: 750px; height: 1334px;
+              background-color: #111A2E;"></div>
+
+  <!-- 2. 特效/状态层：用半透明纯色块表达特殊效果范围 -->
+  <div data-ui-id="SelectedHighlight" data-ui-type="Image"
+       style="position: absolute; left: 24px; top: 214px; width: 702px; height: 96px;
+              background-color: rgba(255, 209, 90, 0.22);"></div>
+
+  <!-- 3. 顶部栏：Container + Button + Image + Text -->
+  <div data-ui-id="TopBar" data-ui-type="Container"
+       style="position: absolute; left: 0; top: 60px; width: 750px; height: 126px;
+              background-color: #18243A;">
+
+    <button data-ui-id="BackButton" data-ui-type="Button"
+            style="position: absolute; left: 24px; top: 24px; width: 78px; height: 78px;
+                   background-color: #2B3D5A; border: 2px solid #6E88B8;">
+      <div data-ui-id="BackIcon" data-ui-type="Image"
+           style="position: absolute; left: 21px; top: 18px; width: 36px; height: 42px;
+                  background-color: #8BD3FF;"></div>
+    </button>
+
+    <div data-ui-id="TitleText" data-ui-type="Text"
+         data-text-overflow="overflow"
+         style="position: absolute; left: 140px; top: 29px; width: 470px; height: 68px;
+                font-size: 46px; font-weight: 900; color: #F9E6A5; text-align: center;">商城布局定位稿</div>
+
+    <div data-ui-id="CurrencyGroup" data-ui-type="Container"
+         style="position: absolute; left: 610px; top: 24px; width: 116px; height: 78px;
+                background-color: rgba(255, 209, 90, 0.16);">
+      <div data-ui-id="CoinIcon" data-ui-type="Image"
+           style="position: absolute; left: 12px; top: 18px; width: 42px; height: 42px;
+                  background-color: #FFD15A;"></div>
+      <div data-ui-id="CoinAmountText" data-ui-type="Text"
+           data-text-overflow="overflow"
+           style="position: absolute; left: 58px; top: 20px; width: 52px; height: 38px;
+                  font-size: 24px; font-weight: 900; color: #FFD15A; text-align: left;">1280</div>
+    </div>
+  </div>
+
+  <!-- 4. 表单面板：Panel/Container + Input + Toggle + Dropdown + Slider -->
+  <div data-ui-id="SettingsPanel" data-ui-type="Panel" data-image-type="sliced"
+       style="position: absolute; left: 24px; top: 214px; width: 702px; height: 310px;
+              background-color: rgba(32, 48, 72, 0.92); border: 2px solid #496A96;">
+
+    <div data-ui-id="SettingsTitleText" data-ui-type="Text"
+         data-text-overflow="overflow"
+         style="position: absolute; left: 24px; top: 18px; width: 280px; height: 42px;
+                font-size: 30px; font-weight: 900; color: #FFFFFF; text-align: left;">交互组件区</div>
+
+    <div data-ui-id="NameInput" data-ui-type="Input"
+         style="position: absolute; left: 24px; top: 74px; width: 300px; height: 62px;
+                background-color: #101A2C; color: #DDEBFF; font-size: 26px; text-align: left;">
+      玩家名
+    </div>
+
+    <div data-ui-id="SoundToggle" data-ui-type="Toggle"
+         style="position: absolute; left: 348px; top: 74px; width: 150px; height: 62px;
+                background-color: #243755; border: 2px solid #39C16C;">
+      <div data-ui-id="SoundToggleCheckmark" data-ui-type="Image"
+           style="position: absolute; left: 12px; top: 14px; width: 34px; height: 34px;
+                  background-color: #39C16C;"></div>
+      <div data-ui-id="SoundToggleText" data-ui-type="Text"
+           style="position: absolute; left: 56px; top: 13px; width: 82px; height: 36px;
+                  font-size: 24px; font-weight: 700; color: #FFFFFF; text-align: left;">音效</div>
+    </div>
+
+    <div data-ui-id="QualityDropdown" data-ui-type="Dropdown"
+         data-dropdown-options="低,中,高,超高"
+         data-dropdown-value="2"
+         style="position: absolute; left: 520px; top: 74px; width: 158px; height: 62px;
+                background-color: #34495E; border: 2px solid #5DADE2;">
+      <div data-ui-id="DropdownLabel" data-ui-type="Text"
+           style="position: absolute; left: 14px; top: 14px; width: 102px; height: 34px;
+                  font-size: 24px; font-weight: 700; color: #FFFFFF; text-align: left;">高</div>
+      <div data-ui-id="DropdownArrow" data-ui-type="Image"
+           style="position: absolute; left: 120px; top: 17px; width: 26px; height: 28px;
+                  background-color: #5DADE2;"></div>
+    </div>
+
+    <div data-ui-id="VolumeSlider" data-ui-type="Slider"
+         data-slider-min-value="0"
+         data-slider-max-value="100"
+         data-slider-value="65"
+         data-slider-direction="leftToRight"
+         data-slider-whole-numbers="true"
+         style="position: absolute; left: 24px; top: 164px; width: 420px; height: 60px;
+                background-color: rgba(57, 193, 108, 0.08);">
+      <div data-ui-id="SliderTrack" data-ui-type="Image"
+           style="position: absolute; left: 0; top: 24px; width: 420px; height: 12px;
+                  background-color: #4A5568;"></div>
+      <div data-ui-id="SliderFill" data-ui-type="Image"
+           style="position: absolute; left: 0; top: 24px; width: 273px; height: 12px;
+                  background-color: #39C16C;"></div>
+      <div data-ui-id="SliderHandle" data-ui-type="Image"
+           style="position: absolute; left: 249px; top: 6px; width: 48px; height: 48px;
+                  background-color: #FFFFFF; border: 2px solid #39C16C;"></div>
+    </div>
+
+    <div data-ui-id="LongDescText" data-ui-type="Text"
+         data-text-overflow="wrap"
+         data-text-truncate="truncate"
+         data-text-best-fit="18-24"
+         style="position: absolute; left: 24px; top: 238px; width: 654px; height: 48px;
+                font-size: 24px; font-weight: 400; color: #B9C7DA; text-align: left;">这是一段用于验证换行、截断和字号自适应的说明文本，超出区域时应在生成端保持可控。</div>
+  </div>
+
+  <!-- 5. ListView：动态列表 + Template + 绑定元信息 -->
+  <div data-ui-id="RewardList" data-ui-type="ListView"
+       data-list-layout="vertical"
+       data-list-binding="RewardItems"
+       data-item-view="RewardItemView"
+       data-row-view="RewardRowView"
+       data-scroll-direction="vertical"
+       data-scroll-movement="clamped"
+       data-scroll-inertia="true"
+       data-spacing-y="14"
+       data-padding-left="16"
+       data-padding-right="16"
+       data-padding-top="16"
+       data-padding-bottom="16"
+       style="position: absolute; left: 24px; top: 548px; width: 342px; height: 320px;
+              background-color: rgba(20, 30, 46, 0.88); border: 2px solid #496A96;">
+
+    <div data-ui-id="RewardItemTemplate" data-ui-type="Template"
+         data-template-kind="item"
+         data-template-view="RewardItemView"
+         style="position: absolute; left: 16px; top: 16px; width: 310px; height: 88px;
+                background-color: #223653;">
+      <div data-ui-id="RewardIcon" data-ui-type="Image"
+           style="position: absolute; left: 12px; top: 14px; width: 60px; height: 60px;
+                  background-color: #FFD15A;"></div>
+      <div data-ui-id="RewardNameText" data-ui-type="Text"
+           data-text-overflow="overflow"
+           style="position: absolute; left: 86px; top: 14px; width: 150px; height: 30px;
+                  font-size: 24px; font-weight: 900; color: #FFFFFF; text-align: left;">金币礼包</div>
+      <div data-ui-id="RewardCountText" data-ui-type="Text"
+           style="position: absolute; left: 86px; top: 48px; width: 120px; height: 26px;
+                  font-size: 20px; font-weight: 700; color: #FFD15A; text-align: left;">x1000</div>
+      <button data-ui-id="RewardClaimButton" data-ui-type="Button"
+              style="position: absolute; left: 236px; top: 20px; width: 58px; height: 48px;
+                     background-color: #39C16C;">
+        <div data-ui-id="RewardClaimText" data-ui-type="Text"
+             style="position: absolute; left: 0; top: 10px; width: 58px; height: 28px;
+                    font-size: 20px; font-weight: 900; color: #FFFFFF; text-align: center;">领</div>
+      </button>
+    </div>
+  </div>
+
+  <!-- 6. Grid：网格列表 + Template + grid 参数 -->
+  <div data-ui-id="TileGrid" data-ui-type="Grid"
+       data-list-layout="grid"
+       data-list-binding="TileItems"
+       data-item-view="TileCellView"
+       data-grid-constraint="fixedColumnCount"
+       data-grid-count="3"
+       data-cell-width="88"
+       data-cell-height="88"
+       data-spacing-x="12"
+       data-spacing-y="12"
+       data-padding-left="14"
+       data-padding-top="14"
+       style="position: absolute; left: 384px; top: 548px; width: 342px; height: 320px;
+              background-color: rgba(20, 30, 46, 0.88); border: 2px solid #496A96;">
+
+    <div data-ui-id="TileCellTemplate" data-ui-type="Template"
+         data-template-kind="item"
+         data-template-view="TileCellView"
+         style="position: absolute; left: 14px; top: 14px; width: 88px; height: 88px;
+                background-color: #3E5B83;">
+      <div data-ui-id="TileIcon" data-ui-type="Image"
+           style="position: absolute; left: 16px; top: 14px; width: 56px; height: 46px;
+                  background-color: #8BD3FF;"></div>
+      <div data-ui-id="TileIndexText" data-ui-type="Text"
+           style="position: absolute; left: 0; top: 62px; width: 88px; height: 22px;
+                  font-size: 18px; font-weight: 700; color: #FFFFFF; text-align: center;">01</div>
+    </div>
+  </div>
+
+  <!-- 7. ScrollView + Scrollbar：通用滚动内容与滚动条 -->
+  <div data-ui-id="HelpScroll" data-ui-type="ScrollView"
+       data-scroll-direction="vertical"
+       data-scroll-movement="elastic"
+       data-scroll-inertia="true"
+       style="position: absolute; left: 24px; top: 892px; width: 520px; height: 210px;
+              background-color: rgba(24, 36, 58, 0.92); border: 2px solid #496A96;">
+    <div data-ui-id="HelpContent" data-ui-type="Text"
+         data-text-overflow="wrap"
+         data-text-truncate="overflow"
+         style="position: absolute; left: 18px; top: 16px; width: 470px; height: 360px;
+                font-size: 22px; font-weight: 400; color: #DDEBFF; text-align: left;">ScrollView 内容区域。这个文本块故意高于视口，用来验证 contentHeight、滚动方向、弹性边界和惯性参数。所有内容仍然使用纯色块和普通文本表达，不使用真实图片或复杂 CSS。</div>
+  </div>
+
+  <div data-ui-id="HelpScrollbar" data-ui-type="Scrollbar"
+       data-scrollbar-direction="topToBottom"
+       data-scrollbar-size="72"
+       data-scrollbar-value="0.15"
+       style="position: absolute; left: 558px; top: 892px; width: 18px; height: 210px;
+              background-color: #26364A;">
+    <div data-ui-id="ScrollbarTrack" data-ui-type="Image"
+         style="position: absolute; left: 0; top: 0; width: 18px; height: 210px;
+                background-color: #26364A;"></div>
+    <div data-ui-id="ScrollbarHandle" data-ui-type="Image"
+         style="position: absolute; left: 0; top: 24px; width: 18px; height: 72px;
+                background-color: #8BD3FF;"></div>
+  </div>
+
+  <!-- 8. 底部导航：Z 序顶层 + 多个按钮状态 -->
+  <div data-ui-id="BottomTabBar" data-ui-type="Container"
+       style="position: absolute; left: 0; top: 1134px; width: 750px; height: 160px;
+              background-color: #18243A;">
+
+    <button data-ui-id="ShopTabButton" data-ui-type="Button"
+            style="position: absolute; left: 24px; top: 20px; width: 210px; height: 110px;
+                   background-color: #FFD15A; border: 2px solid #FFF2A8;">
+      <div data-ui-id="ShopTabIcon" data-ui-type="Image"
+           style="position: absolute; left: 76px; top: 16px; width: 58px; height: 42px;
+                  background-color: #7C4DFF;"></div>
+      <div data-ui-id="ShopTabLabelText" data-ui-type="Text"
+           style="position: absolute; left: 0; top: 66px; width: 210px; height: 34px;
+                  font-size: 24px; font-weight: 900; color: #3F2109; text-align: center;">商店</div>
+    </button>
+
+    <button data-ui-id="BagTabButton" data-ui-type="Button"
+            style="position: absolute; left: 270px; top: 20px; width: 210px; height: 110px;
+                   background-color: #243755; border: 2px solid #445A7C;">
+      <div data-ui-id="BagTabIcon" data-ui-type="Image"
+           style="position: absolute; left: 76px; top: 16px; width: 58px; height: 42px;
+                  background-color: #7A8CA8;"></div>
+      <div data-ui-id="BagTabLabelText" data-ui-type="Text"
+           style="position: absolute; left: 0; top: 66px; width: 210px; height: 34px;
+                  font-size: 24px; font-weight: 700; color: #B9C7DA; text-align: center;">背包</div>
+    </button>
+
+    <button data-ui-id="DisabledButton" data-ui-type="Button"
+            style="position: absolute; left: 516px; top: 20px; width: 210px; height: 110px;
+                   background-color: rgba(122, 140, 168, 0.28); border: 2px solid #445A7C;">
+      <div data-ui-id="DisabledIcon" data-ui-type="Image"
+           style="position: absolute; left: 76px; top: 16px; width: 58px; height: 42px;
+                  background-color: rgba(122, 140, 168, 0.50);"></div>
+      <div data-ui-id="DisabledLabelText" data-ui-type="Text"
+           data-text-overflow="overflow"
+           style="position: absolute; left: 0; top: 66px; width: 210px; height: 34px;
+                  font-size: 24px; font-weight: 700; color: #7A8CA8; text-align: center;">未开放</div>
+    </button>
+  </div>
+
+</div>
+
+</body>
+</html>

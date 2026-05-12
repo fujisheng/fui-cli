@@ -29,8 +29,12 @@ const readRequiredArg = (name, description) => {
   return value;
 };
 
-const readPositiveIntegerArg = (name, description) => {
-  const rawValue = readRequiredArg(name, description);
+const readOptionalPositiveIntegerArg = (name, description) => {
+  const rawValue = readArg(name).trim();
+  if (!rawValue) {
+    return 0;
+  }
+
   const value = Number.parseInt(rawValue, 10);
   if (!Number.isFinite(value) || value <= 0 || `${value}` !== rawValue) {
     fail(`${name} 必须是大于 0 的整数，当前值：${rawValue}。`);
@@ -43,19 +47,22 @@ const showHelp = () => {
   console.log(`FUI WebToUgui visual-ui 提取器
 
 用法：
-  node Packages/com.fujisheng.fui.cli/Tools/WebToUgui/extract-visual-ui.mjs \\
+   node Packages/fui-cli/Skills/fui-cli/scripts/extract-visual-ui/extract-visual-ui.mjs \\
     --input Temp/WebToUgui/MobaHomeView/MobaHomeView.html \\
-    --view MobaHomeView \\
-    --width 1920 \\
-    --height 1080
+    --view MobaHomeView
 
 必填：
   --input   Web 原型 HTML 路径，项目相对路径或绝对路径
   --view    View 名称，用于 JSON viewName 和默认输出目录
-  --width   设计分辨率宽度；必须由用户或项目约定提供，不能默认猜测
-  --height  设计分辨率高度；必须由用户或项目约定提供，不能默认猜测
+
+HTML 必填：
+  原型 HTML 必须声明设计分辨率，推荐二选一：
+  <meta name="fui-design-resolution" content="1170x2532">
+  <div data-design-width="1170" data-design-height="2532">
 
 可选：
+  --width   兼容旧原型的设计宽度；如果 HTML 已声明，必须与 HTML 一致
+  --height  兼容旧原型的设计高度；如果 HTML 已声明，必须与 HTML 一致
   --json    输出 JSON 路径；默认 Temp/WebToUgui/<ViewName>/<ViewName>.visual-ui.json
   --png     输出截图路径；默认 Temp/WebToUgui/<ViewName>/<ViewName>.web.png
   --headed  显示浏览器窗口
@@ -74,10 +81,7 @@ if (!projectRoot) {
 
 const inputHtml = resolveProjectPath(readRequiredArg('--input', 'Web 原型 HTML 路径'));
 const viewName = readRequiredArg('--view', 'View 名称');
-const viewport = {
-  width: readPositiveIntegerArg('--width', '设计分辨率宽度'),
-  height: readPositiveIntegerArg('--height', '设计分辨率高度')
-};
+const cliResolution = readCliResolution();
 const headed = hasFlag('--headed');
 const outputJson = resolveProjectPath(readArg('--json') || `Temp/WebToUgui/${viewName}/${viewName}.visual-ui.json`);
 const outputScreenshot = resolveProjectPath(readArg('--png') || `Temp/WebToUgui/${viewName}/${viewName}.web.png`);
@@ -85,8 +89,68 @@ const outputScreenshot = resolveProjectPath(readArg('--png') || `Temp/WebToUgui/
 await ensureFileExists(inputHtml, `Web 原型 HTML 不存在: ${toProjectRelative(inputHtml)}。`);
 
 const browser = await chromium.launch({ headless: !headed });
-const page = await browser.newPage({ viewport, deviceScaleFactor: 1 });
+const page = await browser.newPage({ deviceScaleFactor: 1 });
 
+await page.goto(pathToFileURL(inputHtml).href);
+await page.waitForLoadState('load');
+
+const htmlResolution = await page.evaluate((currentViewName) => {
+  const parsePositiveInteger = (value) => {
+    const normalized = `${value || ''}`.trim();
+    const parsed = Number.parseInt(normalized, 10);
+    return Number.isFinite(parsed) && parsed > 0 && `${parsed}` === normalized ? parsed : 0;
+  };
+
+  const parseResolutionText = (value, source) => {
+    const match = `${value || ''}`.trim().match(/^(\d+)\s*(?:x|X|×|\*)\s*(\d+)$/);
+    if (!match) {
+      return null;
+    }
+
+    return {
+      width: parsePositiveInteger(match[1]),
+      height: parsePositiveInteger(match[2]),
+      source
+    };
+  };
+
+  const parseDataResolution = (element, source) => {
+    if (!element) {
+      return null;
+    }
+
+    const width = parsePositiveInteger(element.getAttribute('data-design-width'));
+    const height = parsePositiveInteger(element.getAttribute('data-design-height'));
+    return width > 0 && height > 0 ? { width, height, source } : null;
+  };
+
+  const parseViewportResolution = () => {
+    const content = document.querySelector('meta[name="viewport"]')?.getAttribute('content') || '';
+    const parts = Object.fromEntries(content.split(',')
+      .map((part) => part.trim().split('=').map((value) => value.trim()))
+      .filter((part) => part.length === 2));
+    const width = parsePositiveInteger(parts.width);
+    const height = parsePositiveInteger(parts.height);
+    return width > 0 && height > 0 ? { width, height, source: 'meta[name="viewport"]' } : null;
+  };
+
+  const rootByView = Array.from(document.querySelectorAll('[data-ui-id]'))
+    .find((element) => element.getAttribute('data-ui-id') === currentViewName);
+  const firstDataHolder = document.querySelector('[data-design-width][data-design-height]');
+  const candidates = [
+    parseResolutionText(document.querySelector('meta[name="fui-design-resolution"]')?.getAttribute('content'), 'meta[name="fui-design-resolution"]'),
+    parseDataResolution(document.documentElement, 'html[data-design-*]'),
+    parseDataResolution(document.body, 'body[data-design-*]'),
+    parseDataResolution(rootByView, `[data-ui-id="${currentViewName}"][data-design-*]`),
+    parseDataResolution(firstDataHolder, '[data-design-width][data-design-height]'),
+    parseViewportResolution()
+  ];
+
+  return candidates.find(Boolean) || null;
+}, viewName);
+
+const viewport = resolveViewport(htmlResolution, cliResolution);
+await page.setViewportSize(viewport);
 await page.goto(pathToFileURL(inputHtml).href);
 await page.waitForLoadState('load');
 
@@ -141,6 +205,7 @@ const plan = await page.evaluate(({ width, height, viewName }) => {
       case 'text':
         return 'TextElement';
       case 'container':
+      case 'panel':
         return 'Container';
       case 'scrollview':
         return 'ScrollView';
@@ -149,6 +214,12 @@ const plan = await page.evaluate(({ width, height, viewName }) => {
         return 'ListView';
       case 'template':
         return 'Template';
+      case 'slider':
+        return 'SliderElement';
+      case 'dropdown':
+        return 'DropdownElement';
+      case 'scrollbar':
+        return 'ScrollbarElement';
       case 'image':
       default:
         return 'ImageElement';
@@ -189,6 +260,7 @@ const plan = await page.evaluate(({ width, height, viewName }) => {
           color: rgbToHex(backgroundColor),
           textColor: rgbToHex(color),
           sprite: element.dataset.uiSprite || '',
+          imageType: element.dataset.imageType || 'simple',
           alpha: clamp(alphaFromColor(backgroundColor, style.opacity)),
           opacity: clamp(toNumber(style.opacity) || 1),
           borderRadius: clamp(toNumber(style.borderTopLeftRadius)),
@@ -200,7 +272,10 @@ const plan = await page.evaluate(({ width, height, viewName }) => {
           fontSize: clamp(toNumber(style.fontSize)),
           fontWeight: style.fontWeight,
           color: rgbToHex(color),
-          alignment: style.textAlign || 'left'
+          alignment: style.textAlign || 'left',
+          overflow: element.dataset.textOverflow || '',
+          truncate: element.dataset.textTruncate || '',
+          bestFit: element.dataset.textBestFit || ''
         },
         list: {
           layout: element.dataset.listLayout || '',
@@ -208,6 +283,8 @@ const plan = await page.evaluate(({ width, height, viewName }) => {
           itemView: element.dataset.itemView || '',
           rowView: element.dataset.rowView || '',
           scrollDirection: element.dataset.scrollDirection || '',
+          scrollMovement: element.dataset.scrollMovement || '',
+          scrollInertia: element.dataset.scrollInertia || '',
           gridConstraint: element.dataset.gridConstraint || '',
           gridCount: readIntegerData('gridCount', 0),
           cellWidth: readNumberData('cellWidth', 0),
@@ -222,6 +299,22 @@ const plan = await page.evaluate(({ width, height, viewName }) => {
         template: {
           kind: element.dataset.templateKind || '',
           view: element.dataset.templateView || element.dataset.uiId || ''
+        },
+        slider: {
+          minValue: readNumberData('sliderMinValue', 0),
+          maxValue: readNumberData('sliderMaxValue', 1),
+          value: readNumberData('sliderValue', 0),
+          direction: element.dataset.sliderDirection || 'leftToRight',
+          wholeNumbers: element.dataset.sliderWholeNumbers || 'false'
+        },
+        dropdown: {
+          options: element.dataset.dropdownOptions || '',
+          value: readIntegerData('dropdownValue', 0)
+        },
+        scrollbar: {
+          direction: element.dataset.scrollbarDirection || 'vertical',
+          size: readNumberData('scrollbarSize', 60),
+          value: readNumberData('scrollbarValue', 0)
         },
         children: []
       }
@@ -264,6 +357,37 @@ function resolveProjectPath(value) {
 
 function toProjectRelative(value) {
   return path.relative(projectRoot, value).replaceAll('\\', '/');
+}
+
+function readCliResolution() {
+  const width = readOptionalPositiveIntegerArg('--width', '设计分辨率宽度');
+  const height = readOptionalPositiveIntegerArg('--height', '设计分辨率高度');
+  if ((width > 0 && height <= 0) || (width <= 0 && height > 0)) {
+    fail('--width 与 --height 必须同时提供。');
+  }
+
+  return width > 0 && height > 0 ? { width, height, source: 'command line' } : null;
+}
+
+function resolveViewport(htmlResolution, cliResolution) {
+  if (htmlResolution && cliResolution) {
+    if (htmlResolution.width !== cliResolution.width || htmlResolution.height !== cliResolution.height) {
+      fail(`HTML 设计分辨率 ${htmlResolution.width}x${htmlResolution.height}（${htmlResolution.source}）与命令行 ${cliResolution.width}x${cliResolution.height} 不一致。`);
+    }
+
+    return { width: htmlResolution.width, height: htmlResolution.height };
+  }
+
+  if (htmlResolution) {
+    return { width: htmlResolution.width, height: htmlResolution.height };
+  }
+
+  if (cliResolution) {
+    console.warn('HTML 未声明设计分辨率，当前仅使用 --width/--height 兼容旧原型。请在 HTML 中补充 fui-design-resolution 或 data-design-width/data-design-height。');
+    return { width: cliResolution.width, height: cliResolution.height };
+  }
+
+  fail('HTML 未声明设计分辨率。请添加 <meta name="fui-design-resolution" content="1170x2532"> 或 data-design-width/data-design-height。');
 }
 
 async function ensureFileExists(filePath, message) {
