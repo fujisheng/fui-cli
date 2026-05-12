@@ -143,6 +143,7 @@ Assets/Resources/UI/_StyleReference/
         v
 阶段 C：按优先级用 imagegen 逐资源生成
   -> assets_raw/
+  -> process-ui-assets 后处理
   -> assets/
   -> asset-generation-log.json
         |
@@ -279,7 +280,11 @@ prompt 必须分清“布局骨架”和“视觉风格”。
       "reuseKey": "tab.normal",
       "variantOf": "tab.selected",
       "textPolicy": "noText",
-      "priority": 2
+      "priority": 2,
+      "rawPath": "Temp/WebToUgui/ShopView/assets_raw/btn_tab_normal.v01.png",
+      "transparent": true,
+      "fit": "stretch",
+      "alphaMode": "chroma-trim"
     }
   ]
 }
@@ -299,6 +304,13 @@ prompt 必须分清“布局骨架”和“视觉风格”。
 | `variantOf` | 同族状态关系 |
 | `textPolicy` | 是否允许文字进入图片 |
 | `priority` | 阶段 C 生成顺序 |
+| `source` / `rawPath` / `input` | imagegen 原始输出路径，优先级高于自动推断 |
+| `transparent` | 是否需要透明通道；未显式指定 `alphaMode` 时用于推断 |
+| `fit` | 后处理缩放模式：`stretch`、`contain`、`cover`、`none` |
+| `alphaMode` | 后处理透明模式：`keep`、`trim`、`chroma`、`chroma-trim` |
+| `padding` | 裁边后额外保留的透明边距 |
+| `alphaThreshold` | alpha 裁边阈值 |
+| `chromaThreshold` | 色键抠除阈值 |
 
 ### B2. 去重与复用
 
@@ -405,6 +417,61 @@ imagegen 原始输出通常不含 alpha。按类型处理：
 
 ImageMagick、rembg 只能处理 imagegen 已生成的原始图，不能用于从零绘制最终资源。
 
+项目内置通用后处理工具位于：
+
+```text
+Packages/fui-cli/Skills/fui-cli/scripts/process-ui-assets/
+├── process-ui-assets.mjs
+└── postprocess_asset.py
+```
+
+职责边界：
+
+- `postprocess_asset.py` 只处理单张 imagegen PNG，负责透明、裁边、缩放、尺寸校验和 JSON 报告
+- `process-ui-assets.mjs` 读取 `asset-manifest.json`，按 `priority` 批量调用 Python 单图工具
+- 工具可以写入 `tempPath`，并在正式交付阶段复制到 `path`
+- 工具不能创建最终美术，不能把 `design-master.png` 或整屏确认稿当 UI 资源，不能修改 Unity prefab
+
+单图后处理示例：
+
+```powershell
+python Packages\fui-cli\Skills\fui-cli\scripts\process-ui-assets\postprocess_asset.py `
+  --source Temp\WebToUgui\ShopView\assets_raw\btn_tab_normal.v01.png `
+  --output Temp\WebToUgui\ShopView\assets\btn_tab_normal.png `
+  --width 128 `
+  --height 60 `
+  --fit stretch `
+  --alpha-mode chroma-trim
+```
+
+批量 dry-run 示例：
+
+```powershell
+node Packages\fui-cli\Skills\fui-cli\scripts\process-ui-assets\process-ui-assets.mjs `
+  --manifest Temp\WebToUgui\ShopView\asset-manifest.json `
+  --dry-run `
+  --report Temp\WebToUgui\ShopView\process-ui-assets-dry-run.json
+```
+
+批量处理单个资源示例：
+
+```powershell
+node Packages\fui-cli\Skills\fui-cli\scripts\process-ui-assets\process-ui-assets.mjs `
+  --manifest Temp\WebToUgui\ShopView\asset-manifest.json `
+  --asset btn_tab_normal
+```
+
+`process-ui-assets.mjs` 查找输入图的顺序：
+
+1. `source`
+2. `rawPath`
+3. `input`
+4. `assets_raw/<输出文件名>`
+5. `tempPath`
+6. `path`
+
+用户确认前不要对正式 `asset-manifest.json` 执行无 `--dry-run` 的批处理，因为当 `path` 指向 `Assets/Resources/UI/<ViewName>/` 且不同于 `tempPath` 时，工具会在写入 `tempPath` 后复制到 `path`。阶段 C 推荐先使用单图工具写入 `Temp/WebToUgui/<ViewName>/assets/`，或使用 `--dry-run` 检查批量清单。
+
 透明结果检查：
 
 - [ ] 边缘无白边、无杂色残留
@@ -421,7 +488,7 @@ Temp/WebToUgui/<ViewName>/assets_raw/btn_buy.v01.png
 Temp/WebToUgui/<ViewName>/assets/btn_buy.png
 ```
 
-每次尝试记录到 `asset-generation-log.json`：
+人工生成或重试过程记录到 `asset-generation-log.json`：
 
 ```json
 [
@@ -452,6 +519,8 @@ Temp/WebToUgui/<ViewName>/assets/btn_buy.png
 已存在则跳过
 不存在则加入待生成列表
 ```
+
+批量工具未指定 `--report` 时会写入 `asset-generation-log.json`。如果需要保留人工尝试记录，必须显式指定独立报告，例如 `process-ui-assets-report.json`。报告必须保留 `dryRun`、`processedCount`、`ok` 和每个资源的 `source`、`tempPath`、`path`、`fit`、`alphaMode`、单图报告结果。
 
 ---
 
@@ -524,6 +593,16 @@ Temp/WebToUgui/<ViewName>/assets/bg_shop.png
 Temp/WebToUgui/<ViewName>/assets/btn_tab_normal.png
   -> Assets/Resources/UI/<ViewName>/btn_tab_normal.png
 ```
+
+也可以在用户确认后使用批量工具执行正式写入：
+
+```powershell
+node Packages\fui-cli\Skills\fui-cli\scripts\process-ui-assets\process-ui-assets.mjs `
+  --manifest Temp\WebToUgui\ShopView\asset-manifest.json `
+  --report Temp\WebToUgui\ShopView\process-ui-assets-report.json
+```
+
+执行前必须确认 `assets_raw/` 中的输入图都是 imagegen 产物，并且 `asset-manifest.json` 没有把整屏设计图、确认稿或拼合预览图登记为资源。
 
 Unity 导入设置：
 

@@ -8,3 +8,13 @@ node_modules.meta
 package-lock.json
 **/package-lock.json
 **/package-lock.json.meta
+
+# Python 缓存
+__pycache__/
+**/__pycache__/
+*.pyc
+**/*.pyc
+__pycache__.meta
+**/__pycache__.meta
+*.pyc.meta
+**/*.pyc.meta
