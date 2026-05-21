@@ -34,7 +34,7 @@ AI Agent 根据用户需求生成 Web 原型（HTML/CSS），通过固定提取�
 
 ```text
 1. 用户："帮我做一个登录界面，包含用户名输入框、密码输入框和登录按钮"
-2. AI 生成 Web 原型到 Temp/WebToUgui/LoginView/LoginView.html
+2. AI 生成 Web 原型到 FUI-CLI/LoginView/LoginView.html
 3. AI 调用提取脚本生成 visual-ui.json
 4. AI 调用 ui.web_to_ugui_prefab dry_run=true 预检
 5. AI 确认无 issues 后，dry_run=false 生成 Prefab
@@ -121,7 +121,7 @@ AI Agent 不直接操作 Unity Editor，而是通过 **结构化工具调用** �
 {
   "tool": "ui.web_to_ugui_prefab",
   "args": {
-    "json_file": "Temp/WebToUgui/LoginView/LoginView.visual-ui.json",
+    "json_file": "FUI-CLI/LoginView/LoginView.visual-ui.json",
     "prefab_path": "Assets/Resources/UI/Prefabs/LoginView.prefab",
     "dry_run": false
   }

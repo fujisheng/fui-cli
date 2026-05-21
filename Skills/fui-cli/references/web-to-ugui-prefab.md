@@ -16,7 +16,7 @@ C# 实现：`Packages/fui-cli/Editor/WebVisualUiPrefabTool.cs`。
 
 - 设计分辨率必须来自原型 HTML 的显式声明；项目约定只用于校验，未知时先修正 HTML。
 - 没有参考图时，基于功能需求和项目风格生成原创 Web 原型。
-- Web、截图、`visual-ui.json` 必须放在项目根目录 `Temp/WebToUgui/<ViewName>/`。
+- Web、截图、`visual-ui.json` 必须放在项目根目录 `FUI-CLI/<ViewName>/`。
 - `visual-ui.json` 只能由固定提取脚本从 Web DOM 生成，禁止手写、拼接或人工编辑。
 - prefab 输出路径必须按当前项目资源结构决定；不能固定照搬 demo 路径。
 
@@ -42,7 +42,7 @@ C# 实现：`Packages/fui-cli/Editor/WebVisualUiPrefabTool.cs`。
 
 ```powershell
 node Packages/fui-cli/Skills/fui-cli/scripts/extract-visual-ui/extract-visual-ui.mjs `
-  --input Temp/WebToUgui/MobaHomeView/MobaHomeView.html `
+  --input FUI-CLI/MobaHomeView/MobaHomeView.html `
   --view MobaHomeView
 ```
 
@@ -61,21 +61,21 @@ node Packages/fui-cli/Skills/fui-cli/scripts/extract-visual-ui/extract-visual-ui
 默认输出：
 
 ```text
-Temp/WebToUgui/MobaHomeView/MobaHomeView.visual-ui.json
-Temp/WebToUgui/MobaHomeView/MobaHomeView.web.png
+FUI-CLI/MobaHomeView/MobaHomeView.visual-ui.json
+FUI-CLI/MobaHomeView/MobaHomeView.web.png
 ```
 
 ## prefab dry-run
 
 ```powershell
-'{"args":{"json_file":"Temp/WebToUgui/MobaHomeView/MobaHomeView.visual-ui.json","prefab_path":"Assets/Resources/UI/Prefabs/MobaHomeView.prefab","dry_run":true}}' |
+'{"args":{"json_file":"FUI-CLI/MobaHomeView/MobaHomeView.visual-ui.json","prefab_path":"Assets/Resources/UI/Prefabs/MobaHomeView.prefab","dry_run":true}}' |
   Library/UnityCliBridge/unitycli.exe invoke --tool ui.web_to_ugui_prefab --stdin
 ```
 
 ## prefab 生成
 
 ```powershell
-'{"args":{"json_file":"Temp/WebToUgui/MobaHomeView/MobaHomeView.visual-ui.json","prefab_path":"Assets/Resources/UI/Prefabs/MobaHomeView.prefab","dry_run":false}}' |
+'{"args":{"json_file":"FUI-CLI/MobaHomeView/MobaHomeView.visual-ui.json","prefab_path":"Assets/Resources/UI/Prefabs/MobaHomeView.prefab","dry_run":false}}' |
   Library/UnityCliBridge/unitycli.exe invoke --tool ui.web_to_ugui_prefab --stdin
 ```
 

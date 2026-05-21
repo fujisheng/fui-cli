@@ -29,12 +29,14 @@
 所有带 `data-ui-id` 的可提取 UI 元素默认必须使用**纯色矩形**表达。
 
 **允许：**
+
 - `background-color`：任意纯色或 `rgba()` 半透明色，用于表达面板、按钮、状态、高亮、遮罩、特效范围
 - `color`：文字颜色，可表达状态或强调
 - `opacity` / `rgba()` alpha：半透明遮罩、禁用态、效果区域
 - `border`：1-2px 纯色线框，仅用于 Web 预览中的选中框、范围框、调试边界；不要依赖它进入 prefab
 
 **禁止：**
+
 - `data-ui-sprite`、`background-image`、真实 sprite、图标图片、纹理图
 - `linear-gradient()`、`radial-gradient()`、渐变色
 - `box-shadow`、`text-shadow`、发光阴影
@@ -88,6 +90,7 @@
 ```
 
 **约束：**
+
 - 原型 HTML 必须显式声明设计分辨率，优先使用 `<meta name="fui-design-resolution" content="1170x2532">`
 - 根容器建议同时写 `data-design-width` / `data-design-height`，便于工具和人工检查
 - `html, body` 尺寸必须等于设计分辨率
@@ -113,6 +116,7 @@
 ```
 
 **规则：**
+
 - `left/top/width/height` 使用设计分辨率下的像素值
 - 子元素坐标相对于父容器左上角
 - 不用百分比、`vw/vh`、`transform: translate/scale` 作为最终坐标来源
@@ -136,18 +140,19 @@ UGUI 渲染顺序 = sibling index，与 DOM 顺序一致。HTML 中按从底到�
 
 `data-ui-id` 是 prefab 节点名，也是 FUI 绑定标识符。
 
-| 元素类型 | 命名模式 | 示例 |
-| -------- | -------- | ---- |
-| 按钮 | `动词 + Button` | `BackButton`, `BuyButton` |
-| 文本 | `内容 + Text` | `TitleText`, `ScoreText` |
-| 图标/图片占位 | `内容 + Icon/Image/Bg` | `CoinIcon`, `CardBg` |
-| 容器/面板 | `功能 + Panel/Group/Bar` | `TopBar`, `HintGroup` |
-| 列表 | `内容 + List` | `ItemList`, `LevelList` |
-| 输入框 | `字段 + Input` | `NameInput` |
-| 开关 | `功能 + Toggle` | `SoundToggle` |
-| 滚动视图 | `区域 + Scroll` | `HelpScroll` |
+| 元素类型      | 命名模式                   | 示例                          |
+| ------------- | -------------------------- | ----------------------------- |
+| 按钮          | `动词 + Button`          | `BackButton`, `BuyButton` |
+| 文本          | `内容 + Text`            | `TitleText`, `ScoreText`  |
+| 图标/图片占位 | `内容 + Icon/Image/Bg`   | `CoinIcon`, `CardBg`      |
+| 容器/面板     | `功能 + Panel/Group/Bar` | `TopBar`, `HintGroup`     |
+| 列表          | `内容 + List`            | `ItemList`, `LevelList`   |
+| 输入框        | `字段 + Input`           | `NameInput`                 |
+| 开关          | `功能 + Toggle`          | `SoundToggle`               |
+| 滚动视图      | `区域 + Scroll`          | `HelpScroll`                |
 
 **规则：**
+
 - 使用 PascalCase，如 `BackButton`
 - 名字描述内容/功能，不描述颜色或临时视觉表现
 - 同类元素用序号区分：`Slot0`, `Slot1`, `Slot2`
@@ -157,63 +162,63 @@ UGUI 渲染顺序 = sibling index，与 DOM 顺序一致。HTML 中按从底到�
 
 ### `data-ui-type` → UGUI 组件
 
-| `data-ui-type` | 生成组件 | 状态 | 说明 |
-| -------------- | -------- | ---- | ---- |
-| `Button` | `ButtonElement` | ✅ | 可点击按钮 |
-| `Text` | `TextElement` | ✅ | 文本标签，提取 innerText |
-| `Image` | `ImageElement` | ✅ | 纯色块/图片占位，默认值 |
-| `Input` | `InputFieldElement` | ✅ | 文本输入框 |
-| `Toggle` | `ToggleElement` | ✅ | 开关/复选框 |
-| `Container` | `Container` | ✅ | 分组、布局锚点 |
-| `Panel` | `Container` | ✅ | 同 Container |
-| `ScrollView` | `ScrollView` | ✅ | 可滚动区域 |
-| `ListView` | `ListView` | ✅ | 动态列表 |
-| `Grid` | `ListView` | ✅ | 同 ListView |
-| `Template` | `Template` | ✅ | 动态模板节点 |
-| `Slider` | `SliderElement` | ✅ | 滑动条 |
-| `Dropdown` | `DropdownElement` | ✅ | 下拉选择框 |
-| `Scrollbar` | `ScrollbarElement` | ✅ | 滚动条 |
+| `data-ui-type` | 生成组件              | 状态 | 说明                     |
+| ---------------- | --------------------- | ---- | ------------------------ |
+| `Button`       | `ButtonElement`     | ✅   | 可点击按钮               |
+| `Text`         | `TextElement`       | ✅   | 文本标签，提取 innerText |
+| `Image`        | `ImageElement`      | ✅   | 纯色块/图片占位，默认值  |
+| `Input`        | `InputFieldElement` | ✅   | 文本输入框               |
+| `Toggle`       | `ToggleElement`     | ✅   | 开关/复选框              |
+| `Container`    | `Container`         | ✅   | 分组、布局锚点           |
+| `Panel`        | `Container`         | ✅   | 同 Container             |
+| `ScrollView`   | `ScrollView`        | ✅   | 可滚动区域               |
+| `ListView`     | `ListView`          | ✅   | 动态列表                 |
+| `Grid`         | `ListView`          | ✅   | 同 ListView              |
+| `Template`     | `Template`          | ✅   | 动态模板节点             |
+| `Slider`       | `SliderElement`     | ✅   | 滑动条                   |
+| `Dropdown`     | `DropdownElement`   | ✅   | 下拉选择框               |
+| `Scrollbar`    | `ScrollbarElement`  | ✅   | 滚动条                   |
 
 > 省略 `data-ui-type` 时默认为 `ImageElement`。
 
 ### 数据属性一览
 
-| 属性 | 状态 | 用途 | 示例值 |
-| ---- | ---- | ---- | ------ |
-| `data-ui-id` | ✅ | 唯一标识，必填 | `"BackButton"` |
-| `data-ui-type` | ✅ | 组件类型 | `"Button"` |
-| `data-design-width` | ✅ | 设计分辨率宽度，通常写在根容器 | `"1170"` |
-| `data-design-height` | ✅ | 设计分辨率高度，通常写在根容器 | `"2532"` |
-| `data-ui-sprite` | ✅ | Sprite 资源路径，Layout Probe 禁用 | `"Assets/Resources/UI/GameView/icon_coin.png"` |
-| `data-image-type` | ✅ | Image 渲染类型 | `"simple"`, `"sliced"` |
-| `data-list-layout` | ✅ | 列表排列方向 | `"vertical"`, `"horizontal"` |
-| `data-list-binding` | 📄 | 列表数据绑定元信息 | `"Items"` |
-| `data-item-view` | 📄 | 列表项 View 名元信息 | `"LevelNodeItem"` |
-| `data-row-view` | 📄 | 行 View 名元信息 | — |
-| `data-scroll-direction` | ✅ | 滚动方向 | `"vertical"`, `"horizontal"` |
-| `data-scroll-movement` | ✅ | 滚动边界行为 | `"elastic"`, `"clamped"`, `"unrestricted"` |
-| `data-scroll-inertia` | ✅ | 是否启用惯性 | `"true"`, `"false"` |
-| `data-grid-constraint` | ✅ | 网格约束模式 | `"fixedColumnCount"`, `"fixedRowCount"` |
-| `data-grid-count` | ✅ | 网格行列数 | `3` |
-| `data-cell-width` | ✅ | 单元格宽度 | `160` |
-| `data-cell-height` | ✅ | 单元格高度 | `180` |
-| `data-spacing-x/y` | ✅ | 间距，缺省回退 CSS gap | `12` |
-| `data-padding-left/right/top/bottom` | ✅ | 内边距，缺省回退 CSS padding | `8` |
-| `data-text-overflow` | ✅ | 水平溢出方式 | `"wrap"`, `"overflow"` |
-| `data-text-truncate` | ✅ | 垂直截断方式 | `"truncate"`, `"overflow"` |
-| `data-text-best-fit` | ✅ | 自适应字号 | `"true"`, `"false"`, `"8-36"` |
-| `data-slider-min-value` | ✅ | 滑动条最小值 | `0` |
-| `data-slider-max-value` | ✅ | 滑动条最大值 | `100` |
-| `data-slider-value` | ✅ | 滑动条当前值 | `50` |
-| `data-slider-direction` | ✅ | 滑动条方向 | `"leftToRight"`, `"topToBottom"` |
-| `data-slider-whole-numbers` | ✅ | 仅整数 | `"true"`, `"false"` |
-| `data-dropdown-options` | ✅ | 选项列表，逗号分隔 | `"低,中,高"` |
-| `data-dropdown-value` | ✅ | 当前选中索引 | `0` |
-| `data-scrollbar-direction` | ✅ | 滚动条方向 | `"vertical"`, `"horizontal"`, `"bottomToTop"` |
-| `data-scrollbar-size` | ✅ | 滑块尺寸，比例或像素 | `0.25` 或 `60` |
-| `data-scrollbar-value` | ✅ | 当前位置 | `0` |
-| `data-template-kind` | 📄 | 模板类型元信息 | — |
-| `data-template-view` | 📄 | 模板 View 名元信息 | — |
+| 属性                                   | 状态 | 用途                               | 示例值                                              |
+| -------------------------------------- | ---- | ---------------------------------- | --------------------------------------------------- |
+| `data-ui-id`                         | ✅   | 唯一标识，必填                     | `"BackButton"`                                    |
+| `data-ui-type`                       | ✅   | 组件类型                           | `"Button"`                                        |
+| `data-design-width`                  | ✅   | 设计分辨率宽度，通常写在根容器     | `"1170"`                                          |
+| `data-design-height`                 | ✅   | 设计分辨率高度，通常写在根容器     | `"2532"`                                          |
+| `data-ui-sprite`                     | ✅   | Sprite 资源路径，Layout Probe 禁用 | `"Assets/Resources/UI/GameView/icon_coin.png"`    |
+| `data-image-type`                    | ✅   | Image 渲染类型                     | `"simple"`, `"sliced"`                          |
+| `data-list-layout`                   | ✅   | 列表排列方向                       | `"vertical"`, `"horizontal"`                    |
+| `data-list-binding`                  | 📄   | 列表数据绑定元信息                 | `"Items"`                                         |
+| `data-item-view`                     | 📄   | 列表项 View 名元信息               | `"LevelNodeItem"`                                 |
+| `data-row-view`                      | 📄   | 行 View 名元信息                   | —                                                  |
+| `data-scroll-direction`              | ✅   | 滚动方向                           | `"vertical"`, `"horizontal"`                    |
+| `data-scroll-movement`               | ✅   | 滚动边界行为                       | `"elastic"`, `"clamped"`, `"unrestricted"`    |
+| `data-scroll-inertia`                | ✅   | 是否启用惯性                       | `"true"`, `"false"`                             |
+| `data-grid-constraint`               | ✅   | 网格约束模式                       | `"fixedColumnCount"`, `"fixedRowCount"`         |
+| `data-grid-count`                    | ✅   | 网格行列数                         | `3`                                               |
+| `data-cell-width`                    | ✅   | 单元格宽度                         | `160`                                             |
+| `data-cell-height`                   | ✅   | 单元格高度                         | `180`                                             |
+| `data-spacing-x/y`                   | ✅   | 间距，缺省回退 CSS gap             | `12`                                              |
+| `data-padding-left/right/top/bottom` | ✅   | 内边距，缺省回退 CSS padding       | `8`                                               |
+| `data-text-overflow`                 | ✅   | 水平溢出方式                       | `"wrap"`, `"overflow"`                          |
+| `data-text-truncate`                 | ✅   | 垂直截断方式                       | `"truncate"`, `"overflow"`                      |
+| `data-text-best-fit`                 | ✅   | 自适应字号                         | `"true"`, `"false"`, `"8-36"`                 |
+| `data-slider-min-value`              | ✅   | 滑动条最小值                       | `0`                                               |
+| `data-slider-max-value`              | ✅   | 滑动条最大值                       | `100`                                             |
+| `data-slider-value`                  | ✅   | 滑动条当前值                       | `50`                                              |
+| `data-slider-direction`              | ✅   | 滑动条方向                         | `"leftToRight"`, `"topToBottom"`                |
+| `data-slider-whole-numbers`          | ✅   | 仅整数                             | `"true"`, `"false"`                             |
+| `data-dropdown-options`              | ✅   | 选项列表，逗号分隔                 | `"低,中,高"`                                      |
+| `data-dropdown-value`                | ✅   | 当前选中索引                       | `0`                                               |
+| `data-scrollbar-direction`           | ✅   | 滚动条方向                         | `"vertical"`, `"horizontal"`, `"bottomToTop"` |
+| `data-scrollbar-size`                | ✅   | 滑块尺寸，比例或像素               | `0.25` 或 `60`                                  |
+| `data-scrollbar-value`               | ✅   | 当前位置                           | `0`                                               |
+| `data-template-kind`                 | 📄   | 模板类型元信息                     | —                                                  |
+| `data-template-view`                 | 📄   | 模板 View 名元信息                 | —                                                  |
 
 ## 可提取样式
 
@@ -221,11 +226,11 @@ UGUI 渲染顺序 = sibling index，与 DOM 顺序一致。HTML 中按从底到�
 
 提取脚本读取 `background-color`。
 
-| CSS 写法 | 提取结果 | 典型用途 |
-| -------- | -------- | -------- |
-| `#3A1608` | `"#3A1608"` | 纯色面板 |
+| CSS 写法             | 提取结果                  | 典型用途               |
+| -------------------- | ------------------------- | ---------------------- |
+| `#3A1608`          | `"#3A1608"`             | 纯色面板               |
 | `rgba(0,0,0,0.01)` | `"#000000"`, alpha=0.01 | 透明占位区域、点击热区 |
-| `transparent` | 空字符串 | 完全透明、无背景 |
+| `transparent`      | 空字符串                  | 完全透明、无背景       |
 
 颜色可以表达视觉语义，但必须保持纯色。例如选中态可用金色半透明块，危险状态可用红色块，特殊效果范围可用蓝紫色半透明块。
 
@@ -233,13 +238,13 @@ UGUI 渲染顺序 = sibling index，与 DOM 顺序一致。HTML 中按从底到�
 
 提取脚本从 `getComputedStyle` 读取以下文本属性。
 
-| CSS 属性 | 提取到 | 说明 |
-| -------- | ------ | ---- |
-| `font-size` | `text.fontSize` | 必须用 px，如 `58px` |
-| `font-weight` | `text.fontWeight` | `"400"`, `"700"`, `"900"` |
-| `color` | `text.color` | 支持 `#FFF`, `rgba()` |
-| `text-align` | `text.alignment` | `"left"`, `"center"`, `"right"` |
-| innerText | `text.content` | 直接子文本节点 |
+| CSS 属性        | 提取到              | 说明                                  |
+| --------------- | ------------------- | ------------------------------------- |
+| `font-size`   | `text.fontSize`   | 必须用 px，如 `58px`                |
+| `font-weight` | `text.fontWeight` | `"400"`, `"700"`, `"900"`       |
+| `color`       | `text.color`      | 支持 `#FFF`, `rgba()`             |
+| `text-align`  | `text.alignment`  | `"left"`, `"center"`, `"right"` |
+| innerText       | `text.content`    | 直接子文本节点                        |
 
 ```html
 <div data-ui-id="TitleText" data-ui-type="Text"
@@ -248,6 +253,7 @@ UGUI 渲染顺序 = sibling index，与 DOM 顺序一致。HTML 中按从底到�
 ```
 
 **不支持或禁用：**
+
 - `line-height` 不会提取到 JSON
 - `text-shadow` 在 Layout Probe 中禁用；正式文字描边/阴影在 Unity/FUI 侧处理
 - `text-overflow`、`word-break` 不提取；使用下面的 `data-*` 参数声明
@@ -256,11 +262,11 @@ UGUI 渲染顺序 = sibling index，与 DOM 顺序一致。HTML 中按从底到�
 
 UGUI Text 的溢出和自适应参数通过 `data-*` 属性声明。
 
-| 属性 | 说明 | 推荐值 |
-| ---- | ---- | ------ |
-| `data-text-overflow` | 水平溢出：`"wrap"` 换行 / `"overflow"` 不换行 | 按钮标签用 `"overflow"` |
-| `data-text-truncate` | 垂直截断：`"truncate"` 截断 / `"overflow"` 溢出 | 固定高度文本用 `"truncate"` |
-| `data-text-best-fit` | 自适应字号：`"true"` / `"false"` / 范围 `"8-36"` | 默认 `"false"` |
+| 属性                   | 说明                                                   | 推荐值                        |
+| ---------------------- | ------------------------------------------------------ | ----------------------------- |
+| `data-text-overflow` | 水平溢出：`"wrap"` 换行 / `"overflow"` 不换行      | 按钮标签用 `"overflow"`     |
+| `data-text-truncate` | 垂直截断：`"truncate"` 截断 / `"overflow"` 溢出    | 固定高度文本用 `"truncate"` |
+| `data-text-best-fit` | 自适应字号：`"true"` / `"false"` / 范围 `"8-36"` | 默认 `"false"`              |
 
 ```html
 <div data-ui-id="ButtonLabelText" data-ui-type="Text"
@@ -383,11 +389,11 @@ Grid 模式：
 </div>
 ```
 
-| 属性 | 说明 | 默认值 |
-| ---- | ---- | ------ |
-| `data-scroll-direction` | `"vertical"` / `"horizontal"` | `"vertical"` |
-| `data-scroll-movement` | `"elastic"` / `"clamped"` / `"unrestricted"` | `"clamped"` |
-| `data-scroll-inertia` | `"true"` 惯性减速 / `"false"` 立即停止 | `"true"` |
+| 属性                      | 说明                                               | 默认值         |
+| ------------------------- | -------------------------------------------------- | -------------- |
+| `data-scroll-direction` | `"vertical"` / `"horizontal"`                  | `"vertical"` |
+| `data-scroll-movement`  | `"elastic"` / `"clamped"` / `"unrestricted"` | `"clamped"`  |
+| `data-scroll-inertia`   | `"true"` 惯性减速 / `"false"` 立即停止         | `"true"`     |
 
 ScrollView 内部应放一个内容容器，其宽/高可超出 ScrollView 自身尺寸以产生滚动。
 
@@ -451,6 +457,7 @@ ScrollView 内部应放一个内容容器，其宽/高可超出 ScrollView 自�
 纯参考层不要加 `data-ui-id`，这些元素不会进入 prefab。
 
 **不要标记：**
+
 - 背景图、天空、地面、山体、建筑、云、光效
 - 角色立绘、怪物、武器、装饰物件
 - 纯装饰边框、纹理、粒子、阴影
@@ -461,11 +468,11 @@ ScrollView 内部应放一个内容容器，其宽/高可超出 ScrollView 自�
 
 项目目标平台为 Android + iOS。设计时应为设备安全区域预留空间。
 
-| 区域 | 建议留白 | 说明 |
-| ---- | -------- | ---- |
-| 顶部 | ≥ 60px | 状态栏 / 刘海区域，不放可交互元素 |
-| 底部 | ≥ 40px | Home Indicator 区域，不放按钮等交互元素 |
-| 左右边缘 | ≥ 20px | 曲面屏边缘，不放关键内容 |
+| 区域     | 建议留白 | 说明                                    |
+| -------- | -------- | --------------------------------------- |
+| 顶部     | ≥ 60px  | 状态栏 / 刘海区域，不放可交互元素       |
+| 底部     | ≥ 40px  | Home Indicator 区域，不放按钮等交互元素 |
+| 左右边缘 | ≥ 20px  | 曲面屏边缘，不放关键内容                |
 
 ```html
 <!-- 顶部安全区域占位，不加 data-ui-id -->
@@ -497,16 +504,16 @@ Safe Area 的具体像素值依赖目标设备，设计阶段使用估算值。�
 
 ## 已知限制
 
-| 限制 | 说明 |
-| ---- | ---- |
-| 不支持 flexbox/grid 布局 | 必须使用绝对定位，布局不会自动转换为 UGUI Layout Group |
-| 仅读取 `borderTopLeftRadius` | 提取脚本假设四角圆角一致；Layout Probe 应保持矩形 |
-| 不支持 CSS `background-image` | Layout Probe 禁用；正式皮肤阶段也应使用 `data-ui-sprite` |
-| `text-shadow` 不提取 | Layout Probe 禁用；正式文字描边/阴影在 Unity/FUI 侧处理 |
-| `line-height` 不提取 | prefab 使用默认行高 |
-| `border-radius` 可能产生 warning | Layout Probe 应保持矩形；已知 `border_radius_not_supported` 可忽略 |
-| ListView 绑定元信息不自动接线 | `data-list-binding` / `data-item-view` / `data-row-view` 会进入 JSON，但运行时数据绑定仍由 ViewModel/Presenter 接入 |
-| Safe Area 不自动生成运行时组件 | Web 原型只负责预留空间，真实设备适配由 Unity 运行时逻辑完成 |
+| 限制                               | 说明                                                                                                                      |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| 不支持 flexbox/grid 布局           | 必须使用绝对定位，布局不会自动转换为 UGUI Layout Group                                                                    |
+| 仅读取 `borderTopLeftRadius`     | 提取脚本假设四角圆角一致；Layout Probe 应保持矩形                                                                         |
+| 不支持 CSS `background-image`    | Layout Probe 禁用；正式皮肤阶段也应使用 `data-ui-sprite`                                                                |
+| `text-shadow` 不提取             | Layout Probe 禁用；正式文字描边/阴影在 Unity/FUI 侧处理                                                                   |
+| `line-height` 不提取             | prefab 使用默认行高                                                                                                       |
+| `border-radius` 可能产生 warning | Layout Probe 应保持矩形；已知 `border_radius_not_supported` 可忽略                                                      |
+| ListView 绑定元信息不自动接线      | `data-list-binding` / `data-item-view` / `data-row-view` 会进入 JSON，但运行时数据绑定仍由 ViewModel/Presenter 接入 |
+| Safe Area 不自动生成运行时组件     | Web 原型只负责预留空间，真实设备适配由 Unity 运行时逻辑完成                                                               |
 
 ## 参考原型
 

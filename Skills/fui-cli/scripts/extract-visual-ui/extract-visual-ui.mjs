@@ -48,7 +48,7 @@ const showHelp = () => {
 
 用法：
    node Packages/fui-cli/Skills/fui-cli/scripts/extract-visual-ui/extract-visual-ui.mjs \\
-    --input Temp/WebToUgui/MobaHomeView/MobaHomeView.html \\
+    --input FUI-CLI/MobaHomeView/MobaHomeView.html \\
     --view MobaHomeView
 
 必填：
@@ -63,8 +63,8 @@ HTML 必填：
 可选：
   --width   兼容旧原型的设计宽度；如果 HTML 已声明，必须与 HTML 一致
   --height  兼容旧原型的设计高度；如果 HTML 已声明，必须与 HTML 一致
-  --json    输出 JSON 路径；默认 Temp/WebToUgui/<ViewName>/<ViewName>.visual-ui.json
-  --png     输出截图路径；默认 Temp/WebToUgui/<ViewName>/<ViewName>.web.png
+  --json    输出 JSON 路径；默认 FUI-CLI/<ViewName>/<ViewName>.visual-ui.json
+  --png     输出截图路径；默认 FUI-CLI/<ViewName>/<ViewName>.web.png
   --headed  显示浏览器窗口
 `);
 };
@@ -83,8 +83,8 @@ const inputHtml = resolveProjectPath(readRequiredArg('--input', 'Web 原型 HTML
 const viewName = readRequiredArg('--view', 'View 名称');
 const cliResolution = readCliResolution();
 const headed = hasFlag('--headed');
-const outputJson = resolveProjectPath(readArg('--json') || `Temp/WebToUgui/${viewName}/${viewName}.visual-ui.json`);
-const outputScreenshot = resolveProjectPath(readArg('--png') || `Temp/WebToUgui/${viewName}/${viewName}.web.png`);
+const outputJson = resolveProjectPath(readArg('--json') || `FUI-CLI/${viewName}/${viewName}.visual-ui.json`);
+const outputScreenshot = resolveProjectPath(readArg('--png') || `FUI-CLI/${viewName}/${viewName}.web.png`);
 
 await ensureFileExists(inputHtml, `Web 原型 HTML 不存在: ${toProjectRelative(inputHtml)}。`);
 
@@ -181,11 +181,11 @@ const plan = await page.evaluate(({ width, height, viewName }) => {
   const alphaFromColor = (value, opacity) => {
     const match = value.match(/rgba\(([^)]+)\)/i);
     if (!match) {
-      return toNumber(opacity) || 1;
+      return 1;
     }
 
     const parts = match[1].split(',').map((part) => Number.parseFloat(part.trim()));
-    return Number.isFinite(parts[3]) ? parts[3] : (toNumber(opacity) || 1);
+    return Number.isFinite(parts[3]) ? parts[3] : 1;
   };
 
   const directText = (element) => Array.from(element.childNodes)

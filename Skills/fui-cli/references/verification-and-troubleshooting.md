@@ -5,7 +5,7 @@
 1. 确认设计分辨率来自原型 HTML 的显式声明，并与项目约定一致。
 2. 确认 Web 原型只给 UI 节点加 `data-ui-id`。
 3. 使用固定脚本 `Packages/fui-cli/Skills/fui-cli/scripts/extract-visual-ui/extract-visual-ui.mjs` 生成 `visual-ui.json`，禁止手写。
-4. 将 Web、截图、`visual-ui.json` 放到 `Temp/WebToUgui/<ViewName>/`。
+4. 将 Web、截图、`visual-ui.json` 放到项目根目录 `FUI-CLI/<ViewName>/`。
 5. 调用 `ui.web_to_ugui_prefab` 且 `dry_run=true`。
 6. 检查 `issues`、`warnings`、`hierarchy`。
 7. 按项目资源结构确定 prefab 路径后调用 `dry_run=false`。
@@ -37,7 +37,7 @@
 
 ### 中间文件放错位置
 
-Web 原型、截图和 `visual-ui.json` 必须放在项目根目录 `Temp/WebToUgui/<ViewName>/`。
+Web 原型、截图和 `visual-ui.json` 必须放在项目根目录 `FUI-CLI/<ViewName>/`。
 
 不要放到 `Assets/`、`Packages/` 或 demo 输出目录。
 
@@ -58,7 +58,7 @@ Web 原型、截图和 `visual-ui.json` 必须放在项目根目录 `Temp/WebToU
 **Web→prefab 任务：**
 - [ ] 设计分辨率来自原型 HTML，且与项目约定一致
 - [ ] Web 原型明确区分视觉参考层和可提取 UI 层
-- [ ] 中间 Web/截图/JSON 位于 `Temp/WebToUgui/`
+- [ ] 中间 Web/截图/JSON 位于 `FUI-CLI/`
 - [ ] `visual-ui.json` 由固定提取脚本生成，没有手写或人工编辑
 - [ ] 生成 prefab 前执行过 dry-run，且 `issues` 为空
 - [ ] 生成的 prefab 不包含背景、角色插画、云、山体、草地等纯装饰节点

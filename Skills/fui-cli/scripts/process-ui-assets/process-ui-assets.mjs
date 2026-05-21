@@ -30,7 +30,7 @@ const showHelp = () => {
 
 Usage:
   node Packages/fui-cli/Skills/fui-cli/scripts/process-ui-assets/process-ui-assets.mjs \\
-    --manifest Temp/WebToUgui/LoginView/asset-manifest.json
+    --manifest FUI-CLI/LoginView/asset-manifest.json
 
 Options:
   --manifest <path>     Required asset-manifest.json path
@@ -43,6 +43,7 @@ Options:
 Rules:
   This tool only post-processes bitmap files created by imagegen.
   It does not create final art, does not use a full-screen design as UI, and does not edit Unity prefabs.
+  Use alphaSource/repairedAsset/aiChromaSource to adopt imagegen repaired assets into assets_png.
 `);
 };
 
@@ -56,7 +57,7 @@ if (!projectRoot) {
   fail('无法定位 Unity 项目根目录，请在包含 Assets/Packages/ProjectSettings 的项目内执行。');
 }
 
-const manifestPath = resolveProjectPath(readArg('--manifest'));
+const manifestPath = resolveManifestPath(readArg('--manifest'));
 if (!manifestPath) {
   fail('缺少必填参数 --manifest。');
 }
@@ -69,7 +70,7 @@ const pythonCommand = readArg('--python') || 'python';
 const dryRun = hasFlag('--dry-run');
 const assetFilters = readRepeatedArg('--asset');
 const manifestDir = path.dirname(manifestPath);
-const reportPath = resolveProjectPath(readArg('--report') || path.join(manifestDir, 'asset-generation-log.json'));
+const reportPath = resolveReportPath(readArg('--report') || path.join(manifestDir, 'asset-generation-log.json'));
 const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
 const assets = Array.isArray(manifest.assets) ? manifest.assets : [];
 
@@ -108,15 +109,15 @@ process.exit(report.ok ? 0 : 1);
 async function processAsset(asset) {
   const id = resolveAssetId(asset);
   const source = resolveAssetSource(asset);
-  const tempOutput = resolveAssetPath(asset.tempPath || asset.output || asset.path);
-  const finalOutput = resolveAssetPath(asset.path || asset.output || asset.tempPath);
+  const tempOutput = resolveAssetPath(asset.file || asset.tempPath || asset.output || asset.path);
+  const finalOutput = resolveAssetPath(asset.path || asset.output || asset.tempPath || asset.file);
 
   if (!source) {
     return {
       id,
       ok: false,
       error: 'source_not_found',
-      message: '找不到输入图片。请在 asset.source/rawPath/tempPath/path 中提供一个存在的路径。'
+      message: '找不到输入图片。请在 asset.alphaSource/repairedAsset/aiChromaSource/source/rawPath/tempPath/path 中提供一个存在的路径。'
     };
   }
 
@@ -125,18 +126,32 @@ async function processAsset(asset) {
       id,
       ok: false,
       error: 'output_not_found',
-      message: '找不到输出路径。请在 asset.tempPath 或 asset.path 中提供路径。'
+      message: '找不到输出路径。请在 asset.file、asset.tempPath 或 asset.path 中提供路径。'
     };
   }
 
   const size = asset.size || {};
   const width = Number(asset.width || size.width || 0);
   const height = Number(asset.height || size.height || 0);
-  const alphaMode = asset.alphaMode || asset.process?.alphaMode || (asset.transparent ? 'trim' : 'keep');
+  const alphaMode = resolveAlphaMode(asset);
   const fit = asset.fit || asset.process?.fit || 'stretch';
   const padding = Number(asset.padding || asset.process?.padding || 0);
   const alphaThreshold = Number(asset.alphaThreshold || asset.process?.alphaThreshold || 8);
   const chromaThreshold = Number(asset.chromaThreshold || asset.process?.chromaThreshold || 28);
+  const chroma = asset.chroma || asset.process?.chroma || {};
+  const chromaKeyColor = asset.chromaKeyColor || chroma.keyColor || '';
+  const chromaAutoKey = asset.chromaAutoKey || chroma.autoKey || (asset.aiChromaSource ? 'border' : 'corners');
+  const transparentThreshold = Number(asset.transparentThreshold || chroma.transparentThreshold || 18);
+  const opaqueThreshold = Number(asset.opaqueThreshold || chroma.opaqueThreshold || 180);
+  const edgeContract = Number(asset.edgeContract || chroma.edgeContract || 0);
+  const edgeFeather = Number(asset.edgeFeather || chroma.edgeFeather || 0);
+  const despill = Boolean(asset.despill || chroma.despill || alphaMode.startsWith('chroma-soft'));
+  const maxChromaResidueRatio = Number(
+    asset.maxChromaResidueRatio
+    ?? chroma.maxResidueRatio
+    ?? asset.process?.maxChromaResidueRatio
+    ?? -1
+  );
 
   const commandArgs = [
     path.join(__dirname, 'postprocess_asset.py'),
@@ -146,8 +161,22 @@ async function processAsset(asset) {
     '--alpha-mode', alphaMode,
     '--padding', String(padding),
     '--alpha-threshold', String(alphaThreshold),
-    '--chroma-threshold', String(chromaThreshold)
+    '--chroma-threshold', String(chromaThreshold),
+    '--chroma-auto-key', chromaAutoKey,
+    '--transparent-threshold', String(transparentThreshold),
+    '--opaque-threshold', String(opaqueThreshold),
+    '--edge-contract', String(edgeContract),
+    '--edge-feather', String(edgeFeather),
+    '--max-chroma-residue-ratio', String(maxChromaResidueRatio)
   ];
+
+  if (chromaKeyColor) {
+    commandArgs.push('--chroma-key-color', chromaKeyColor);
+  }
+
+  if (despill) {
+    commandArgs.push('--despill');
+  }
 
   if (width > 0 && height > 0) {
     commandArgs.push('--width', String(width), '--height', String(height));
@@ -191,8 +220,44 @@ async function processAsset(asset) {
     path: finalOutput ? toProjectRelative(finalOutput) : '',
     fit,
     alphaMode,
+    generationMode: asset.generationMode || '',
+    aiEditScope: asset.aiEditScope || '',
+    repairedAsset: asset.repairedAsset ? toProjectRelative(resolveAssetPath(asset.repairedAsset)) : '',
+    alphaSource: asset.alphaSource ? toProjectRelative(resolveAssetPath(asset.alphaSource)) : '',
     report: postprocessReport
   };
+}
+
+function resolveAlphaMode(asset) {
+  if (asset.alphaMode || asset.process?.alphaMode) {
+    return asset.alphaMode || asset.process.alphaMode;
+  }
+
+  if (!asset.transparent) {
+    return 'keep';
+  }
+
+  if (asset.alphaSource || asset.aiAlphaSource) {
+    return 'trim';
+  }
+
+  if (asset.aiChromaSource || isChromaRepairedAsset(asset)) {
+    return 'chroma-soft-trim';
+  }
+
+  return 'trim';
+}
+
+function isChromaRepairedAsset(asset) {
+  if (!asset.repairedAsset) {
+    return false;
+  }
+
+  if (asset.chroma || asset.chromaKeyColor) {
+    return true;
+  }
+
+  return `${asset.repairedAsset}`.replaceAll('\\', '/').includes('ai_chroma_sources/');
 }
 
 function runProcess(command, commandArgs) {
@@ -258,6 +323,10 @@ function resolveAssetId(asset) {
 
 function resolveAssetSource(asset) {
   const candidates = [
+    asset.alphaSource,
+    asset.aiAlphaSource,
+    asset.repairedAsset,
+    asset.aiChromaSource,
     asset.source,
     asset.rawPath,
     asset.input,
@@ -282,7 +351,7 @@ function inferRawAssetPath(asset) {
     return '';
   }
 
-  return path.join(manifestDir, 'assets_raw', path.basename(target));
+  return path.join('assets_raw', path.basename(target));
 }
 
 function resolveAssetPath(value) {
@@ -290,11 +359,59 @@ function resolveAssetPath(value) {
     return '';
   }
 
-  if (path.isAbsolute(value)) {
-    return path.normalize(value);
+  const raw = `${value}`.trim();
+  if (!raw) {
+    return '';
   }
 
-  return path.resolve(projectRoot, value);
+  const normalized = raw.replaceAll('\\', '/');
+  rejectUnsafeRelativePath(normalized);
+
+  if (isUnityAssetPath(normalized)) {
+    return resolveContainedPath(projectRoot, normalized, path.join(projectRoot, 'Assets'));
+  }
+
+  if (isFuiCliPath(normalized)) {
+    return resolveContainedPath(projectRoot, normalized, path.join(projectRoot, 'FUI-CLI'));
+  }
+
+  return resolveContainedPath(manifestDir, normalized, manifestDir);
+}
+
+function rejectUnsafeRelativePath(value) {
+  if (value.includes('\0')) {
+    fail(`manifest 路径包含非法字符：${value}`);
+  }
+
+  if (path.isAbsolute(value) || /^[A-Za-z]:/.test(value) || value.startsWith('//')) {
+    fail(`manifest 路径必须使用项目相对路径，禁止绝对路径：${value}`);
+  }
+
+  if (value.split('/').some((part) => part === '..')) {
+    fail(`manifest 路径禁止使用 .. 逃逸目录：${value}`);
+  }
+}
+
+function resolveContainedPath(baseDir, relativePath, allowedRoot) {
+  const resolved = path.resolve(baseDir, relativePath);
+  if (!isPathInside(resolved, allowedRoot)) {
+    fail(`manifest 路径越界：${relativePath}`);
+  }
+
+  return resolved;
+}
+
+function isPathInside(filePath, directory) {
+  const relative = path.relative(directory, filePath);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+function isUnityAssetPath(value) {
+  return value === 'Assets' || value.startsWith('Assets/');
+}
+
+function isFuiCliPath(value) {
+  return value === 'FUI-CLI' || value.startsWith('FUI-CLI/');
 }
 
 function resolveProjectPath(value) {
@@ -307,6 +424,24 @@ function resolveProjectPath(value) {
   }
 
   return path.resolve(projectRoot, value);
+}
+
+function resolveManifestPath(value) {
+  const resolved = resolveProjectPath(value);
+  if (resolved && !isPathInside(resolved, path.join(projectRoot, 'FUI-CLI'))) {
+    fail(`manifest 必须位于项目根目录 FUI-CLI/ 下：${toProjectRelative(resolved)}`);
+  }
+
+  return resolved;
+}
+
+function resolveReportPath(value) {
+  const resolved = resolveProjectPath(value);
+  if (resolved && !isPathInside(resolved, path.join(projectRoot, 'FUI-CLI'))) {
+    fail(`报告必须写入项目根目录 FUI-CLI/ 下：${toProjectRelative(resolved)}`);
+  }
+
+  return resolved;
 }
 
 function findProjectRoot(start) {
