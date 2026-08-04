@@ -212,8 +212,18 @@ const plan = await page.evaluate(({ width, height, viewName }) => {
       case 'listview':
       case 'grid':
         return 'ListView';
+      case 'staticlist':
+      case 'static-list':
+        return 'StaticListViewElement';
       case 'template':
         return 'Template';
+      case 'dynamicview':
+      case 'dynamic-view':
+        return 'DynamicViewElement';
+      case 'mask':
+        return 'MaskElement';
+      case 'star':
+        return 'StarElement';
       case 'slider':
         return 'SliderElement';
       case 'dropdown':
@@ -250,6 +260,7 @@ const plan = await page.evaluate(({ width, height, viewName }) => {
         name: element.dataset.uiId,
         webType,
         element: mapElement(webType),
+        component: element.dataset.uiComponent || '',
         rect: {
           x: clamp(rect.left),
           y: clamp(rect.top),
@@ -315,6 +326,14 @@ const plan = await page.evaluate(({ width, height, viewName }) => {
           direction: element.dataset.scrollbarDirection || 'vertical',
           size: readNumberData('scrollbarSize', 60),
           value: readNumberData('scrollbarValue', 0)
+        },
+        transition: {
+          component: element.dataset.enterTransition || '',
+          role: element.dataset.enterRole || '',
+          delay: readNumberData('enterDelay', 0),
+          duration: readNumberData('enterDuration', 0.5),
+          globalDelay: readNumberData('enterGlobalDelay', 0),
+          offsetFactor: readNumberData('enterOffsetFactor', 1)
         },
         children: []
       }

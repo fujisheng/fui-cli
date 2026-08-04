@@ -20,7 +20,7 @@
 - 不表达最终贴图、真实图标、纹理、渐变、阴影、滤镜、动画
 - 不用 CSS 模拟 Unity 运行时效果
 - 不自动接入 ViewModel/Presenter 绑定逻辑
-- 不自动生成 Safe Area 运行时适配组件
+- 不会凭布局猜测 Safe Area；需要通过 `data-ui-component` 显式声明运行时组件
 
 ## 核心硬规则
 
@@ -162,22 +162,26 @@ UGUI 渲染顺序 = sibling index，与 DOM 顺序一致。HTML 中按从底到�
 
 ### `data-ui-type` → UGUI 组件
 
-| `data-ui-type` | 生成组件              | 状态 | 说明                     |
-| ---------------- | --------------------- | ---- | ------------------------ |
-| `Button`       | `ButtonElement`     | ✅   | 可点击按钮               |
-| `Text`         | `TextElement`       | ✅   | 文本标签，提取 innerText |
-| `Image`        | `ImageElement`      | ✅   | 纯色块/图片占位，默认值  |
-| `Input`        | `InputFieldElement` | ✅   | 文本输入框               |
-| `Toggle`       | `ToggleElement`     | ✅   | 开关/复选框              |
-| `Container`    | `Container`         | ✅   | 分组、布局锚点           |
-| `Panel`        | `Container`         | ✅   | 同 Container             |
-| `ScrollView`   | `ScrollView`        | ✅   | 可滚动区域               |
-| `ListView`     | `ListView`          | ✅   | 动态列表                 |
-| `Grid`         | `ListView`          | ✅   | 同 ListView              |
-| `Template`     | `Template`          | ✅   | 动态模板节点             |
-| `Slider`       | `SliderElement`     | ✅   | 滑动条                   |
-| `Dropdown`     | `DropdownElement`   | ✅   | 下拉选择框               |
-| `Scrollbar`    | `ScrollbarElement`  | ✅   | 滚动条                   |
+| `data-ui-type` | 生成组件 | 状态 | 说明 |
+| -------------- | -------- | ---- | ---- |
+| `Button` | `ButtonElement` | ✅ | 可点击按钮 |
+| `Text` | `TextElement` | ✅ | 文本标签，提取 innerText |
+| `Image` | `ImageElement` | ✅ | 纯色块/图片占位，默认值 |
+| `Input` | `InputFieldElement` | ✅ | 文本输入框 |
+| `Toggle` | `ToggleElement` | ✅ | 开关/复选框 |
+| `Container` | `Container` | ✅ | 分组、布局锚点 |
+| `Panel` | `Container` | ✅ | 同 Container |
+| `ScrollView` | `ScrollView` | ✅ | 可滚动区域 |
+| `ListView` | `ListView` | ✅ | 动态列表 |
+| `Grid` | `ListView` | ✅ | 同 ListView |
+| `StaticList` | `StaticListViewElement` | ✅ | 使用首个 Template 作为 itemPrefab 的静态列表 |
+| `Template` | `Template` | ✅ | 动态模板节点 |
+| `DynamicView` | `DynamicViewElement` | ✅ | 按 Source 动态加载子 View/角色展示 |
+| `Mask` | `ImageElement` + `Mask` | ✅ | 使用 Sprite alpha 裁剪子图片 |
+| `Star` | `StarElement` | ✅ | 图片星级；每个直属子节点的第一个子节点为点亮图片 |
+| `Slider` | `SliderElement` | ✅ | 滑动条 |
+| `Dropdown` | `DropdownElement` | ✅ | 下拉选择框 |
+| `Scrollbar` | `ScrollbarElement` | ✅ | 滚动条 |
 
 > 省略 `data-ui-type` 时默认为 `ImageElement`。
 
@@ -485,7 +489,17 @@ ScrollView 内部应放一个内容容器，其宽/高可超出 ScrollView 自�
 </div>
 ```
 
-Safe Area 的具体像素值依赖目标设备，设计阶段使用估算值。当前 Web → prefab 生成工具不会自动添加 Safe Area 运行时适配组件，最终仍需要 Unity 运行时逻辑处理 `Screen.safeArea`。
+Safe Area 的具体像素值依赖目标设备。需要运行时适配时，把全屏背景留在安全区容器外，并在前景容器上显式声明组件：
+
+```html
+<div data-ui-id="SafeAreaPanel" data-ui-type="Container"
+     data-ui-component="SafeAreaAdapter"
+     style="position:absolute; left:0; top:0; width:<设计宽>px; height:<设计高>px;">
+  ...
+</div>
+```
+
+`data-ui-component` 必须填写 Unity 当前已加载、继承自 `Component` 的类型名；找不到类型时 dry-run 会报错。
 
 ## 生成前检查清单
 
@@ -504,16 +518,16 @@ Safe Area 的具体像素值依赖目标设备，设计阶段使用估算值。�
 
 ## 已知限制
 
-| 限制                               | 说明                                                                                                                      |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| 不支持 flexbox/grid 布局           | 必须使用绝对定位，布局不会自动转换为 UGUI Layout Group                                                                    |
-| 仅读取 `borderTopLeftRadius`     | 提取脚本假设四角圆角一致；Layout Probe 应保持矩形                                                                         |
-| 不支持 CSS `background-image`    | Layout Probe 禁用；正式皮肤阶段也应使用 `data-ui-sprite`                                                                |
-| `text-shadow` 不提取             | Layout Probe 禁用；正式文字描边/阴影在 Unity/FUI 侧处理                                                                   |
-| `line-height` 不提取             | prefab 使用默认行高                                                                                                       |
-| `border-radius` 可能产生 warning | Layout Probe 应保持矩形；已知 `border_radius_not_supported` 可忽略                                                      |
-| ListView 绑定元信息不自动接线      | `data-list-binding` / `data-item-view` / `data-row-view` 会进入 JSON，但运行时数据绑定仍由 ViewModel/Presenter 接入 |
-| Safe Area 不自动生成运行时组件     | Web 原型只负责预留空间，真实设备适配由 Unity 运行时逻辑完成                                                               |
+| 限制 | 说明 |
+| ---- | ---- |
+| 不支持 flexbox/grid 布局 | 必须使用绝对定位，布局不会自动转换为 UGUI Layout Group |
+| 仅读取 `borderTopLeftRadius` | 提取脚本假设四角圆角一致；Layout Probe 应保持矩形 |
+| 不支持 CSS `background-image` | Layout Probe 禁用；正式皮肤阶段也应使用 `data-ui-sprite` |
+| `text-shadow` 不提取 | Layout Probe 禁用；正式文字描边/阴影在 Unity/FUI 侧处理 |
+| `line-height` 不提取 | prefab 使用默认行高 |
+| `border-radius` 可能产生 warning | Layout Probe 应保持矩形；已知 `border_radius_not_supported` 可忽略 |
+| ListView 绑定元信息不自动接线 | `data-list-binding` / `data-item-view` / `data-row-view` 会进入 JSON，但运行时数据绑定仍由 ViewModel/Presenter 接入 |
+| Safe Area 不会自动推断 | 将背景留在容器外，并在 `SafeAreaPanel` 上声明 `data-ui-component="SafeAreaAdapter"` |
 
 ## 参考原型
 

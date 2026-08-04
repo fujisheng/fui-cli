@@ -38,6 +38,8 @@ C# 实现：`Packages/fui-cli/Editor/WebVisualUiPrefabTool.cs`。
 - Input、Toggle 等可交互控件
 - 需要 FUI 绑定或运行态检查的元素
 
+节点需要额外 Unity 组件时，可声明 `data-ui-component="完整类型名"`；生成器会在 dry-run 校验类型并将组件添加到该节点。
+
 ## 固定提取命令
 
 ```powershell
@@ -79,6 +81,22 @@ FUI-CLI/MobaHomeView/MobaHomeView.web.png
   Library/UnityCliBridge/unitycli.exe invoke --tool ui.web_to_ugui_prefab --stdin
 ```
 
+## 现有 prefab 子树补丁
+
+需要保留现有动画、音效和绑定，只新增或替换指定父节点下的同名根子树时，使用 `patch_parent_path`：
+
+```powershell
+'{"args":{"json_file":"Temp/WebToUgui/CardPatch/CardPatch.visual-ui.json","prefab_path":"Assets/Resources/UI/Battle/BattlePrepareView.prefab","patch_parent_path":"BattlePrepareView/SafeAreaPanel/CardItem","dry_run":true}}' |
+  Library/UnityCliBridge/unitycli.exe invoke --tool ui.web_to_ugui_prefab --stdin
+```
+
+规则：
+
+- `patch_parent_path` 必须指向现有 prefab 中的节点。
+- 只替换该父节点下与 visual-ui 根节点同名的直接子树。
+- 其它兄弟节点、组件、动画和绑定保持不变。
+- 仍然必须先 dry-run，再执行正式写入。
+
 ## 检查清单
 
 - [ ] 分辨率来自原型 HTML，且与项目约定一致
@@ -95,3 +113,4 @@ FUI-CLI/MobaHomeView/MobaHomeView.web.png
   - `json_file`：`visual-ui.json` 路径
   - `prefab_path`：输出 `.prefab` 路径（按项目资源结构决定）
   - `dry_run`：`true` 仅验证不写入，`false` 正式生成
+  - `patch_parent_path`：可选；对现有 prefab 指定父节点执行同名子树补丁

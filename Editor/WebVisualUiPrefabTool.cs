@@ -33,6 +33,9 @@ namespace FUI.Cli
 
             [UnityCliParam("是否只预览不写入 prefab。", Required = false, DefaultValue = false)]
             public bool dry_run { get; set; }
+
+            [UnityCliParam("可选：仅在现有 prefab 的指定父节点下补丁式生成根节点。", Required = false)]
+            public string patch_parent_path { get; set; }
         }
 
         protected override object ExecuteCommand(Parameters parameters, ToolContext context, Dictionary<string, object> args)
@@ -87,7 +90,7 @@ namespace FUI.Cli
                 return inputError;
             }
 
-            var result = WebVisualUiPrefabBuilder.Build(plan, prefabPath, parameters.dry_run);
+            var result = WebVisualUiPrefabBuilder.Build(plan, prefabPath, parameters.dry_run, parameters.patch_parent_path);
             var response = new
             {
                 ok = result.ok,
@@ -96,6 +99,7 @@ namespace FUI.Cli
                 prefabPath,
                 plan.viewName,
                 parameters.dry_run,
+                parameters.patch_parent_path,
                 nodeCount = result.nodeCount,
                 elementCount = result.elementCount,
                 warnings = result.warnings.ToArray(),
@@ -215,6 +219,7 @@ namespace FUI.Cli
         public string name = string.Empty;
         public string webType = string.Empty;
         public string element = string.Empty;
+        public string component = string.Empty;
         public WebVisualRect rect = new WebVisualRect();
         public WebVisualStyle style = new WebVisualStyle();
         public WebVisualText text = new WebVisualText();
@@ -223,7 +228,19 @@ namespace FUI.Cli
         public WebVisualSlider slider = new WebVisualSlider();
         public WebVisualDropdown dropdown = new WebVisualDropdown();
         public WebVisualScrollbar scrollbar = new WebVisualScrollbar();
+        public WebVisualTransition transition = new WebVisualTransition();
         public List<WebVisualNode> children = new List<WebVisualNode>();
+    }
+
+    [Serializable]
+    public sealed class WebVisualTransition
+    {
+        public string component = string.Empty;
+        public string role = string.Empty;
+        public float delay;
+        public float duration = 0.5f;
+        public float globalDelay;
+        public float offsetFactor = 1f;
     }
 
     [Serializable]
@@ -346,13 +363,30 @@ namespace FUI.Cli
 
     static class WebVisualUiPrefabBuilder
     {
-        public static WebVisualPrefabResult Build(WebVisualUiPlan plan, string prefabPath, bool dryRun)
+        public static WebVisualPrefabResult Build(WebVisualUiPlan plan, string prefabPath, bool dryRun, string patchParentPath = null)
         {
             var result = new WebVisualPrefabResult();
             GameObject root = null;
+            var loadedPrefabContents = false;
             try
             {
-                root = CreateRoot(plan);
+                var isPatch = !string.IsNullOrWhiteSpace(patchParentPath);
+                if (isPatch)
+                {
+                    root = PrefabUtility.LoadPrefabContents(prefabPath);
+                    loadedPrefabContents = true;
+                    if (root == null)
+                    {
+                        result.ok = false;
+                        result.issues.Add(WebVisualPrefabIssue.Create("patch_prefab_load_failed", $"无法加载待补丁 prefab: {prefabPath}。"));
+                        return result;
+                    }
+                }
+                else
+                {
+                    root = CreateRoot(plan);
+                }
+
                 var rootRect = new WebVisualRect
                 {
                     x = 0f,
@@ -361,10 +395,43 @@ namespace FUI.Cli
                     height = plan.referenceResolution.height
                 };
 
+                var targetParent = root.transform;
+                if (isPatch)
+                {
+                    targetParent = FindPatchParent(root.transform, patchParentPath);
+                    if (targetParent == null)
+                    {
+                        result.ok = false;
+                        result.issues.Add(WebVisualPrefabIssue.Create(
+                            "patch_parent_not_found",
+                            $"找不到补丁父节点: {patchParentPath}。",
+                            patchParentPath));
+                        return result;
+                    }
+
+                    var targetRect = targetParent as RectTransform;
+                    if (targetRect != null)
+                    {
+                        rootRect.width = targetRect.rect.width;
+                        rootRect.height = targetRect.rect.height;
+                    }
+                }
+
                 foreach (var node in GetRootChildren(plan))
                 {
-                    CreateNode(root.transform, node, rootRect, result, string.Empty, dryRun);
+                    if (isPatch)
+                    {
+                        var oldChild = targetParent.Find(SanitizeName(node.id, "Element"));
+                        if (oldChild != null && oldChild.parent == targetParent)
+                        {
+                            UnityEngine.Object.DestroyImmediate(oldChild.gameObject);
+                        }
+                    }
+
+                    CreateNode(targetParent, node, rootRect, result, string.Empty, dryRun);
                 }
+
+                ConfigureEnterTransition(root, plan, result);
 
                 BuildHierarchy(root.transform, 0, result.hierarchy);
 
@@ -395,9 +462,38 @@ namespace FUI.Cli
             {
                 if (root != null)
                 {
-                    UnityEngine.Object.DestroyImmediate(root);
+                    if (loadedPrefabContents)
+                    {
+                        PrefabUtility.UnloadPrefabContents(root);
+                    }
+                    else
+                    {
+                        UnityEngine.Object.DestroyImmediate(root);
+                    }
                 }
             }
+        }
+
+        static Transform FindPatchParent(Transform root, string rawPath)
+        {
+            if (root == null || string.IsNullOrWhiteSpace(rawPath))
+            {
+                return null;
+            }
+
+            var path = rawPath.Replace('\\', '/').Trim('/');
+            if (string.Equals(path, root.name, StringComparison.Ordinal))
+            {
+                return root;
+            }
+
+            var rootPrefix = root.name + "/";
+            if (path.StartsWith(rootPrefix, StringComparison.Ordinal))
+            {
+                path = path.Substring(rootPrefix.Length);
+            }
+
+            return root.Find(path);
         }
 
         static GameObject CreateRoot(WebVisualUiPlan plan)
@@ -440,6 +536,170 @@ namespace FUI.Cli
             return plan.nodes;
         }
 
+        static void ConfigureEnterTransition(GameObject root, WebVisualUiPlan plan, WebVisualPrefabResult result)
+        {
+            if (root == null || plan?.nodes == null || plan.nodes.Count != 1)
+            {
+                return;
+            }
+
+            var rootNode = plan.nodes[0];
+            var transition = rootNode?.transition;
+            if (transition == null || string.IsNullOrWhiteSpace(transition.component))
+            {
+                return;
+            }
+
+            var component = EnsureComponentByTypeName(root, transition.component.Trim(), result, root.name);
+            if (component == null)
+            {
+                return;
+            }
+
+            var serialized = new SerializedObject(component);
+            SetFloatProperty(serialized, "duration", Mathf.Max(0f, transition.duration));
+            SetFloatProperty(serialized, "delay", Mathf.Max(0f, transition.globalDelay));
+            SetFloatProperty(serialized, "offsetFactor", Mathf.Max(0f, transition.offsetFactor));
+
+            var nodes = new List<WebVisualNode>();
+            CollectTransitionNodes(rootNode.children, nodes);
+            ConfigureTransitionNodeList(serialized.FindProperty("topNodes"), root.transform, nodes, "top", result);
+            ConfigureTransitionNodeList(serialized.FindProperty("bottomNodes"), root.transform, nodes, "bottom", result);
+            ConfigureTransitionNodeList(serialized.FindProperty("leftNodes"), root.transform, nodes, "left", result);
+            ConfigureTransitionNodeList(serialized.FindProperty("rightNodes"), root.transform, nodes, "right", result);
+            ConfigureTransitionNodeList(serialized.FindProperty("centerNodes"), root.transform, nodes, "center", result);
+            ConfigureFadeNodeList(serialized.FindProperty("fadeNodes"), root.transform, nodes, result);
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        static void SetFloatProperty(SerializedObject serialized, string name, float value)
+        {
+            var property = serialized.FindProperty(name);
+            if (property != null)
+            {
+                property.floatValue = value;
+            }
+        }
+
+        static void CollectTransitionNodes(IEnumerable<WebVisualNode> source, List<WebVisualNode> result)
+        {
+            if (source == null)
+            {
+                return;
+            }
+
+            foreach (var node in source)
+            {
+                if (node == null)
+                {
+                    continue;
+                }
+
+                if (node.transition != null && !string.IsNullOrWhiteSpace(node.transition.role))
+                {
+                    result.Add(node);
+                }
+
+                CollectTransitionNodes(node.children, result);
+            }
+        }
+
+        static void ConfigureTransitionNodeList(
+            SerializedProperty property,
+            Transform root,
+            List<WebVisualNode> nodes,
+            string role,
+            WebVisualPrefabResult result)
+        {
+            if (property == null)
+            {
+                return;
+            }
+
+            var matching = nodes.FindAll(node => string.Equals(node.transition.role, role, StringComparison.OrdinalIgnoreCase));
+            property.arraySize = matching.Count;
+            for (var index = 0; index < matching.Count; index++)
+            {
+                var node = matching[index];
+                var target = FindDescendantByName(root, SanitizeName(node.name, node.id));
+                if (target == null)
+                {
+                    result.ok = false;
+                    result.issues.Add(WebVisualPrefabIssue.Create("transition_target_not_found", $"找不到入场动画节点: {node.id}", node.id));
+                    continue;
+                }
+
+                var item = property.GetArrayElementAtIndex(index);
+                item.FindPropertyRelative("rect").objectReferenceValue = target as RectTransform;
+                item.FindPropertyRelative("delay").floatValue = Mathf.Max(0f, node.transition.delay);
+            }
+        }
+
+        static void ConfigureFadeNodeList(
+            SerializedProperty property,
+            Transform root,
+            List<WebVisualNode> nodes,
+            WebVisualPrefabResult result)
+        {
+            if (property == null)
+            {
+                return;
+            }
+
+            var matching = nodes.FindAll(node => string.Equals(node.transition.role, "fade", StringComparison.OrdinalIgnoreCase));
+            property.arraySize = matching.Count;
+            for (var index = 0; index < matching.Count; index++)
+            {
+                var node = matching[index];
+                var target = FindDescendantByName(root, SanitizeName(node.name, node.id));
+                if (target == null)
+                {
+                    result.ok = false;
+                    result.issues.Add(WebVisualPrefabIssue.Create("transition_target_not_found", $"找不到渐入动画节点: {node.id}", node.id));
+                    continue;
+                }
+
+                var canvasGroup = target.GetComponent<CanvasGroup>();
+                var graphic = target.GetComponent<Graphic>();
+                if (canvasGroup == null && graphic == null)
+                {
+                    result.ok = false;
+                    result.issues.Add(WebVisualPrefabIssue.Create("transition_fade_target_invalid", $"渐入节点缺少 CanvasGroup 或 Graphic: {node.id}", node.id));
+                    continue;
+                }
+
+                var item = property.GetArrayElementAtIndex(index);
+                item.FindPropertyRelative("canvasGroup").objectReferenceValue = canvasGroup;
+                item.FindPropertyRelative("graphic").objectReferenceValue = graphic;
+                item.FindPropertyRelative("delay").floatValue = Mathf.Max(0f, node.transition.delay);
+            }
+        }
+
+        static Transform FindDescendantByName(Transform root, string name)
+        {
+            if (root == null)
+            {
+                return null;
+            }
+
+            for (var index = 0; index < root.childCount; index++)
+            {
+                var child = root.GetChild(index);
+                if (string.Equals(child.name, name, StringComparison.Ordinal))
+                {
+                    return child;
+                }
+
+                var nested = FindDescendantByName(child, name);
+                if (nested != null)
+                {
+                    return nested;
+                }
+            }
+
+            return null;
+        }
+
         static void CreateNode(Transform parent, WebVisualNode node, WebVisualRect parentRect, WebVisualPrefabResult result, string parentPath, bool dryRun)
         {
             if (node == null)
@@ -454,6 +714,10 @@ namespace FUI.Cli
             nodeObject.transform.SetParent(parent, false);
             ApplyRect(nodeObject.GetComponent<RectTransform>(), node.rect, parentRect);
             ApplyElement(nodeObject, node, result, nodePath, dryRun);
+            if (!string.IsNullOrWhiteSpace(node.component))
+            {
+                EnsureComponentByTypeName(nodeObject, node.component.Trim(), result, nodePath);
+            }
 
             result.nodeCount++;
             var element = NormalizeElement(node.element);
@@ -482,7 +746,9 @@ namespace FUI.Cli
 
         static IEnumerable<WebVisualNode> ResolveChildrenToCreate(WebVisualNode node, WebVisualPrefabResult result, string nodePath)
         {
-            if (!string.Equals(NormalizeElement(node.element), "ListView", StringComparison.Ordinal))
+            var element = NormalizeElement(node.element);
+            if (!string.Equals(element, "ListView", StringComparison.Ordinal)
+                && !string.Equals(element, "StaticListViewElement", StringComparison.Ordinal))
             {
                 return node.children;
             }
@@ -534,8 +800,23 @@ namespace FUI.Cli
                 case "ListView":
                     ConfigureListView(nodeObject, node);
                     break;
+                case "StaticListViewElement":
+                    ConfigureStaticListView(nodeObject, node);
+                    break;
                 case "Template":
                     ConfigureTemplate(nodeObject, node);
+                    break;
+                case "DynamicViewElement":
+                    EnsureComponent<DynamicViewElement>(nodeObject);
+                    break;
+                case "MaskElement":
+                    ConfigureImage(nodeObject, node.style, false, result, nodePath, dryRun);
+                    var mask = EnsureComponent<Mask>(nodeObject);
+                    mask.showMaskGraphic = true;
+                    EnsureComponent<ImageElement>(nodeObject);
+                    break;
+                case "StarElement":
+                    EnsureComponentByTypeName(nodeObject, "Game.UI.StarElement", result, nodePath);
                     break;
                 case "TextElement":
                     ConfigureText(nodeObject, node.text, node.style, false);
@@ -546,7 +827,10 @@ namespace FUI.Cli
                     button.targetGraphic = nodeObject.GetComponent<Image>();
                     EnsureComponent<ImageElement>(nodeObject);
                     EnsureComponent<ButtonElement>(nodeObject);
-                    CreateTextChild(nodeObject.transform, "Label", node.text, true);
+                    if (node.text != null && !string.IsNullOrWhiteSpace(node.text.content))
+                    {
+                        CreateTextChild(nodeObject.transform, "Label", node.text, true);
+                    }
                     break;
                 case "InputFieldElement":
                     ConfigureImage(nodeObject, node.style, true, result, nodePath, dryRun);
@@ -843,6 +1127,14 @@ namespace FUI.Cli
             ConfigureListLayout(content.gameObject, node, list, layout);
         }
 
+        static void ConfigureStaticListView(GameObject nodeObject, WebVisualNode node)
+        {
+            var list = node.list ?? new WebVisualList();
+            var layout = NormalizeListLayout(list.layout);
+            EnsureComponent<StaticListViewElement>(nodeObject);
+            ConfigureListLayout(nodeObject, node, list, layout);
+        }
+
         static void ConfigureTemplate(GameObject nodeObject, WebVisualNode node)
         {
             nodeObject.AddComponent<View>();
@@ -850,12 +1142,17 @@ namespace FUI.Cli
 
         static void ConfigureListTemplateChild(GameObject nodeObject, WebVisualNode node, int childIndex)
         {
-            if (!string.Equals(NormalizeElement(node.element), "ListView", StringComparison.Ordinal) || childIndex != 0)
+            var element = NormalizeElement(node.element);
+            if ((!string.Equals(element, "ListView", StringComparison.Ordinal)
+                && !string.Equals(element, "StaticListViewElement", StringComparison.Ordinal))
+                || childIndex != 0)
             {
                 return;
             }
 
-            var content = nodeObject.transform.Find("Viewport/Content");
+            var content = string.Equals(element, "ListView", StringComparison.Ordinal)
+                ? nodeObject.transform.Find("Viewport/Content")
+                : nodeObject.transform;
             if (content == null || content.childCount == 0)
             {
                 return;
@@ -868,6 +1165,18 @@ namespace FUI.Cli
             }
 
             template.SetActive(false);
+
+            var staticList = nodeObject.GetComponent<StaticListViewElement>();
+            if (staticList != null)
+            {
+                var serializedList = new SerializedObject(staticList);
+                var itemPrefab = serializedList.FindProperty("itemPrefab");
+                if (itemPrefab != null)
+                {
+                    itemPrefab.objectReferenceValue = template;
+                    serializedList.ApplyModifiedPropertiesWithoutUndo();
+                }
+            }
         }
 
         static void ConfigureCompositeControlChildren(GameObject nodeObject, WebVisualNode node)
@@ -1521,6 +1830,29 @@ namespace FUI.Cli
             }
 
             return gameObject.AddComponent<T>();
+        }
+
+        static Component EnsureComponentByTypeName(GameObject gameObject, string typeName, WebVisualPrefabResult result, string nodePath)
+        {
+            Type componentType = null;
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                componentType = assembly.GetType(typeName, false);
+                if (componentType != null)
+                {
+                    break;
+                }
+            }
+
+            if (componentType == null || !typeof(Component).IsAssignableFrom(componentType))
+            {
+                result.ok = false;
+                result.issues.Add(WebVisualPrefabIssue.Create("component_type_not_found", $"找不到组件类型: {typeName}", nodePath));
+                return null;
+            }
+
+            var component = gameObject.GetComponent(componentType);
+            return component == null ? gameObject.AddComponent(componentType) : component;
         }
 
         static void BuildHierarchy(Transform transform, int depth, List<object> hierarchy)
