@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using FUI.UGUI;
-using FUI.UGUI.Control;
+using FUI.Rendering.UGUI;
+using FUI.Rendering.UGUI.Elements;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
@@ -835,7 +835,7 @@ namespace FUI.Cli
                 case "InputFieldElement":
                     ConfigureImage(nodeObject, node.style, true, result, nodePath, dryRun);
                     var inputField = EnsureComponent<InputField>(nodeObject);
-                    EnsureComponent<InputFieldElement>(nodeObject);
+                    EnsureComponent<LegacyInputFieldElement>(nodeObject);
                     var inputText = CreateTextChild(nodeObject.transform, "Text", node.text, false);
                     inputField.textComponent = inputText;
                     inputField.text = node.text == null ? string.Empty : node.text.content ?? string.Empty;
@@ -1092,7 +1092,7 @@ namespace FUI.Cli
             dropdown.value = Mathf.Clamp(node.dropdown == null ? 0 : node.dropdown.value, 0, Mathf.Max(0, dropdown.options.Count - 1));
             dropdown.RefreshShownValue();
             EnsureComponent<ImageElement>(nodeObject);
-            EnsureComponent<DropdownElement>(nodeObject);
+            EnsureComponent<LegacyDropdownElement>(nodeObject);
         }
 
         static void ConfigureScrollbar(GameObject nodeObject, WebVisualNode node, WebVisualPrefabResult result, string nodePath, bool dryRun)
@@ -1115,7 +1115,7 @@ namespace FUI.Cli
             var list = node.list ?? new WebVisualList();
             var layout = NormalizeListLayout(list.layout);
             ConfigureScrollDirection(scrollRect, list, layout);
-            EnsureComponent<ScrollRectElement>(nodeObject);
+            EnsureComponent<ScrollListElement>(nodeObject);
 
             var content = scrollRect.content;
             if (content == null)
@@ -1131,7 +1131,7 @@ namespace FUI.Cli
         {
             var list = node.list ?? new WebVisualList();
             var layout = NormalizeListLayout(list.layout);
-            EnsureComponent<StaticListViewElement>(nodeObject);
+            EnsureComponent<RecyclingListElement>(nodeObject);
             ConfigureListLayout(nodeObject, node, list, layout);
         }
 
@@ -1166,7 +1166,7 @@ namespace FUI.Cli
 
             template.SetActive(false);
 
-            var staticList = nodeObject.GetComponent<StaticListViewElement>();
+            var staticList = nodeObject.GetComponent<RecyclingListElement>();
             if (staticList != null)
             {
                 var serializedList = new SerializedObject(staticList);
@@ -1483,9 +1483,8 @@ namespace FUI.Cli
             ApplyTextOverflow(textComponent, text);
             ApplyTextBestFit(textComponent, text);
             textComponent.raycastTarget = false;
-            textComponent.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            EnsureComponent<LegacyTextAdapter>(nodeObject);
-            EnsureComponent<TextElement>(nodeObject);
+            textComponent.font = UnityEngine.Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            EnsureComponent<LegacyTextElement>(nodeObject);
             return textComponent;
         }
 

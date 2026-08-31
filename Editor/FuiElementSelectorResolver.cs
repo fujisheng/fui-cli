@@ -2,8 +2,8 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using FUI;
-using FUI.UGUI.Control;
+using FUI.Rendering;
+using FUI.Rendering.UGUI.Elements;
 using UnityCli.Editor.Core;
 using UnityCli.Protocol;
 using UnityEngine;
@@ -91,9 +91,9 @@ namespace FUI.Cli
                 return true;
             }
 
-            if (!(rootElement is ListViewElement listView))
+            if (!(rootElement is ListElement listView))
             {
-                error = ToolResult.Error("selector_not_list", $"元素 '{parsed.element}' 不是 ListViewElement，不能使用 itemIndex。", new
+                error = ToolResult.Error("selector_not_list", $"元素 '{parsed.element}' 不是 ListElement，不能使用 itemIndex。", new
                 {
                     selector = parsed.ToData(),
                     elementType = rootElement.GetType().FullName
@@ -101,7 +101,7 @@ namespace FUI.Cli
                 return false;
             }
 
-            if (!(UIInspectorHelpers.GetPropertyValue(listView, "ItemEntites") is IList itemEntities))
+            if (!(UIInspectorHelpers.GetPropertyValue(listView, "ItemInstances") is IList itemEntities))
             {
                 error = ToolResult.Error("selector_list_items_unavailable", $"列表 '{parsed.element}' 没有可读 item 实体集合。", new { selector = parsed.ToData() });
                 return false;

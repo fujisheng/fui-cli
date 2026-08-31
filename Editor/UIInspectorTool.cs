@@ -3,8 +3,8 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using FUI;
-using FUI.UGUI;
+using FUI.Infrastructure;
+using FUI.Rendering;
 using UnityCli.Editor.Attributes;
 using UnityCli.Editor.Core;
 using UnityCli.Protocol;
@@ -38,7 +38,7 @@ namespace FUI.Cli
                 {
                     Success = false,
                     Error = "Registry resolution failed",
-                    Message = "Failed to resolve FUI.Editor.UIEntityRegistry."
+                    Message = "Failed to resolve FUI.Editor.ViewInstanceRegistry."
                 };
             }
 
@@ -379,8 +379,8 @@ namespace FUI.Cli
     {
         public static List<object> GetEntities()
         {
-            var entities = new List<UIEntity>();
-            FUI.Editor.UIEntityRegistry.GetEnabledEntities(entities);
+            var entities = new List<ViewInstance>();
+            FUI.Editor.ViewInstanceRegistry.GetEnabledInstances(entities);
             var result = new List<object>(entities.Count);
             foreach (var entity in entities)
             {
