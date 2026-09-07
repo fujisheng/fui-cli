@@ -15,9 +15,11 @@ reference rects describe the initial pose, not the sole runtime positioning poli
 - Grid uses positive `columns`, `cellWidth`, `cellHeight`. No implicit responsive column inference.
 - `contentHeight:true` adds a vertical ContentSizeFitter to an anchored content node. It must not
   compete with a parent layout owning the same height.
-- `safeArea:true` adds WebSafeArea. It fits the reference content width and minimum usable height
-  into Screen.safeArea; tall screens gain usable height, wide screens retain a centered content column.
-  Background art belongs outside this node. Verify safe-area changes at runtime.
+- `safeArea:true` adds `FUI.Rendering.UGUI.SafeAreaFitter`. The runtime component belongs to FUI;
+  fui-cli only configures it while generating the prefab and must not ship a runtime assembly.
+  It fits the reference content width and minimum usable height into `Screen.safeArea`; tall screens
+  gain usable height, while wide screens retain a centered content column. Background art belongs
+  outside this node. Verify safe-area changes at runtime.
 
 ## Collections
 

@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
-using FUI.Cli.Layout;
+using FUI.Rendering.UGUI;
 namespace FUI.Cli
 {
     [Serializable]
@@ -83,7 +83,7 @@ namespace FUI.Cli
                 }
             }
             if(l.contentHeight){var fit=EnsureComponent<ContentSizeFitter>(go);fit.horizontalFit=ContentSizeFitter.FitMode.Unconstrained;fit.verticalFit=ContentSizeFitter.FitMode.PreferredSize;}
-            if(l.safeArea){var safe=EnsureComponent<WebSafeArea>(go);safe.referenceWidth=node.rect.width;safe.minimumHeight=node.rect.height;}
+            if(l.safeArea){var safe=EnsureComponent<SafeAreaFitter>(go);safe.ReferenceWidth=node.rect.width;safe.MinimumHeight=node.rect.height;}
         }
     }
 }
