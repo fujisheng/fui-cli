@@ -220,6 +220,14 @@ namespace FUI.Cli
         public string webType = string.Empty;
         public string element = string.Empty;
         public string component = string.Empty;
+        public WebControlOptions control = new WebControlOptions();
+        public WebLayoutOptions layout = new WebLayoutOptions();
+        public string owner = string.Empty;
+        public string part = string.Empty;
+        public string binding = string.Empty;
+        public string targetGraphic = string.Empty;
+        public bool hitRegion;
+        public bool clip;
         public WebVisualRect rect = new WebVisualRect();
         public WebVisualStyle style = new WebVisualStyle();
         public WebVisualText text = new WebVisualText();
@@ -315,6 +323,8 @@ namespace FUI.Cli
         public string imageType = string.Empty;
         public float alpha = 1f;
         public float opacity = 1f;
+        public float[] spriteBorder;
+        public float pixelsPerUnitMultiplier = 1f;
         public float borderRadius;
         public float contentWidth;
         public float contentHeight;
@@ -361,11 +371,19 @@ namespace FUI.Cli
         }
     }
 
-    static class WebVisualUiPrefabBuilder
+    static partial class WebVisualUiPrefabBuilder
     {
         public static WebVisualPrefabResult Build(WebVisualUiPlan plan, string prefabPath, bool dryRun, string patchParentPath = null)
         {
             var result = new WebVisualPrefabResult();
+            ValidateStructure(plan, result);
+            if (!result.ok) return result;
+            // Check the complete plan without writes before any importer or prefab mutation.
+            if (!dryRun)
+            {
+                var preflight = Build(plan, prefabPath, true, patchParentPath);
+                if (!preflight.ok) return preflight;
+            }
             GameObject root = null;
             var loadedPrefabContents = false;
             try
@@ -435,6 +453,7 @@ namespace FUI.Cli
 
                 BuildHierarchy(root.transform, 0, result.hierarchy);
 
+                if (!result.ok) return result;
                 if (!dryRun)
                 {
                     EnsureFolderExists(prefabPath);
@@ -518,6 +537,16 @@ namespace FUI.Cli
             scaler.referenceResolution = new Vector2(plan.referenceResolution.width, plan.referenceResolution.height);
             scaler.matchWidthOrHeight = 0.5f;
 
+            // The DOM view root is folded into this Canvas. Preserve its explicit solid
+            // backdrop so modal views can dim and intercept the page behind them.
+            var source = plan.nodes.Count == 1 ? plan.nodes[0] : null;
+            if (source != null && (source.id == plan.viewName || source.name == plan.viewName)
+                && !string.IsNullOrWhiteSpace(source.style?.color) && ResolveAlpha(source.style) > 0f)
+            {
+                var backdrop = root.AddComponent<Image>();
+                backdrop.color = ParseColor(source.style.color, Color.clear, ResolveAlpha(source.style));
+                backdrop.raycastTarget = true;
+            }
             return root;
         }
 
@@ -721,7 +750,7 @@ namespace FUI.Cli
 
             result.nodeCount++;
             var element = NormalizeElement(node.element);
-            if (!string.Equals(element, "Container", StringComparison.Ordinal))
+            if (!string.Equals(element, "Container", StringComparison.Ordinal) && node.binding != "none")
             {
                 result.elementCount++;
             }
@@ -731,8 +760,8 @@ namespace FUI.Cli
                 return;
             }
 
-            var childParent = ResolveChildParent(nodeObject);
-            var childParentRect = ResolveChildParentRect(node);
+            var childParent = node.element == "ScrollView" ? nodeObject.transform : ResolveChildParent(nodeObject);
+            var childParentRect = node.element == "ScrollView" ? node.rect : ResolveChildParentRect(node);
             var childIndex = 0;
             foreach (var child in ResolveChildrenToCreate(node, result, nodePath))
             {
@@ -741,7 +770,20 @@ namespace FUI.Cli
                 childIndex++;
             }
 
-            ConfigureCompositeControlChildren(nodeObject, node);
+            ConfigureDeclaredControl(nodeObject, node);
+            ConfigureControlOptions(nodeObject, node);
+            ApplyLayout(nodeObject, node, parentRect);
+            if (nodeObject.TryGetComponent<Button>(out var button) && !string.IsNullOrEmpty(node.targetGraphic))
+            {
+                var target = FindDescendant(nodeObject.transform, node.targetGraphic);
+                button.targetGraphic = target == null ? null : target.GetComponent<Graphic>();
+            }
+            // Decorative visuals remain inspectable as Unity components without registering FUI bindings.
+            if (node.binding == "none")
+            {
+                if (nodeObject.TryGetComponent<ImageElement>(out var imageElement)) UnityEngine.Object.DestroyImmediate(imageElement);
+                if (nodeObject.TryGetComponent<LegacyTextElement>(out var textElement)) UnityEngine.Object.DestroyImmediate(textElement);
+            }
         }
 
         static IEnumerable<WebVisualNode> ResolveChildrenToCreate(WebVisualNode node, WebVisualPrefabResult result, string nodePath)
@@ -788,14 +830,29 @@ namespace FUI.Cli
             var element = NormalizeElement(node.element);
             switch (element)
             {
+                case "RawImage":
+                    var raw=EnsureComponent<RawImage>(nodeObject);
+                    raw.texture=AssetDatabase.LoadAssetAtPath<Texture>(NormalizeAssetPath(node.style?.sprite));
+                    raw.color=ParseColor(node.style?.color,Color.white,ResolveAlpha(node.style));raw.raycastTarget=false;break;
+                case "RectMask2D": EnsureComponent<RectMask2D>(nodeObject);break;
+                case "ToggleGroup": EnsureComponent<ToggleGroup>(nodeObject);break;
+                case "CanvasGroup": EnsureComponent<CanvasGroup>(nodeObject);break;
+                case "HorizontalLayoutGroup": EnsureComponent<HorizontalLayoutGroup>(nodeObject);break;
+                case "VerticalLayoutGroup": EnsureComponent<VerticalLayoutGroup>(nodeObject);break;
+                case "GridLayoutGroup": EnsureComponent<GridLayoutGroup>(nodeObject);break;
+                case "ContentSizeFitter": EnsureComponent<ContentSizeFitter>(nodeObject);break;
+                case "AspectRatioFitter": EnsureComponent<AspectRatioFitter>(nodeObject);break;
+                case "LayoutElement": EnsureComponent<UnityEngine.UI.LayoutElement>(nodeObject);break;
                 case "Container":
-                    if (!string.IsNullOrWhiteSpace(node.style?.color))
+                    if (!string.IsNullOrWhiteSpace(node.style?.color) && ResolveAlpha(node.style) > 0f)
                     {
                         ConfigureImage(nodeObject, node.style, false, result, nodePath, dryRun);
                     }
                     break;
                 case "ScrollView":
-                    ConfigureScrollView(nodeObject, node);
+                    var scroll = EnsureComponent<ScrollRect>(nodeObject);
+                    ConfigureScrollDirection(scroll, node.list ?? new WebVisualList(), NormalizeListLayout(node.list?.layout));
+                    ConfigureScrollBehavior(scroll, node.list ?? new WebVisualList());
                     break;
                 case "ListView":
                     ConfigureListView(nodeObject, node);
@@ -836,8 +893,7 @@ namespace FUI.Cli
                     ConfigureImage(nodeObject, node.style, true, result, nodePath, dryRun);
                     var inputField = EnsureComponent<InputField>(nodeObject);
                     EnsureComponent<LegacyInputFieldElement>(nodeObject);
-                    var inputText = CreateTextChild(nodeObject.transform, "Text", node.text, false);
-                    inputField.textComponent = inputText;
+                    // Authored text/placeholder parts are assigned after children; do not synthesize duplicates.
                     inputField.text = node.text == null ? string.Empty : node.text.content ?? string.Empty;
                     break;
                 case "ToggleElement":
@@ -858,7 +914,7 @@ namespace FUI.Cli
                     break;
                 case "ImageElement":
                 default:
-                    ConfigureImage(nodeObject, node.style, true, result, nodePath, dryRun);
+                    ConfigureImage(nodeObject, node.style, false, result, nodePath, dryRun);
                     EnsureComponent<ImageElement>(nodeObject);
                     break;
             }
@@ -910,6 +966,7 @@ namespace FUI.Cli
             image.color = ParseColor(style == null ? string.Empty : style.color, Color.white, ResolveAlpha(style));
             image.raycastTarget = raycastTarget;
             image.type = ParseImageType(style == null ? string.Empty : style.imageType);
+            image.pixelsPerUnitMultiplier = style == null ? 1f : Mathf.Max(.001f, style.pixelsPerUnitMultiplier);
 
             var spritePath = NormalizeAssetPath(style == null ? string.Empty : style.sprite);
             if (!string.IsNullOrWhiteSpace(spritePath))
@@ -998,6 +1055,8 @@ namespace FUI.Cli
 
         static Vector4 ResolveSpriteBorder(WebVisualStyle style)
         {
+            if (style?.spriteBorder != null && style.spriteBorder.Length == 4)
+                return new Vector4(style.spriteBorder[0], style.spriteBorder[1], style.spriteBorder[2], style.spriteBorder[3]);
             if (style == null || style.borderRadius <= 0f)
             {
                 return Vector4.zero;
@@ -1176,96 +1235,6 @@ namespace FUI.Cli
                     itemPrefab.objectReferenceValue = template;
                     serializedList.ApplyModifiedPropertiesWithoutUndo();
                 }
-            }
-        }
-
-        static void ConfigureCompositeControlChildren(GameObject nodeObject, WebVisualNode node)
-        {
-            var element = NormalizeElement(node.element);
-            switch (element)
-            {
-                case "SliderElement":
-                    ConfigureSliderChildReferences(nodeObject);
-                    break;
-                case "DropdownElement":
-                    ConfigureDropdownChildReferences(nodeObject);
-                    break;
-                case "ScrollbarElement":
-                    ConfigureScrollbarChildReferences(nodeObject);
-                    break;
-            }
-        }
-
-        static void ConfigureSliderChildReferences(GameObject nodeObject)
-        {
-            var slider = nodeObject.GetComponent<Slider>();
-            if (slider == null)
-            {
-                return;
-            }
-
-            var fillRect = FindDescendantRect(nodeObject.transform, "fill");
-            if (fillRect != null)
-            {
-                slider.fillRect = fillRect;
-            }
-
-            var handleRect = FindDescendantRect(nodeObject.transform, "handle", "knob");
-            if (handleRect != null)
-            {
-                slider.handleRect = handleRect;
-                var graphic = handleRect.GetComponent<Graphic>();
-                if (graphic != null)
-                {
-                    slider.targetGraphic = graphic;
-                }
-            }
-        }
-
-        static void ConfigureDropdownChildReferences(GameObject nodeObject)
-        {
-            var dropdown = nodeObject.GetComponent<Dropdown>();
-            if (dropdown == null)
-            {
-                return;
-            }
-
-            var captionText = FindDescendantComponent<Text>(nodeObject.transform, "label", "caption", "text");
-            if (captionText == null && dropdown.options.Count > 0)
-            {
-                var selectedIndex = Mathf.Clamp(dropdown.value, 0, dropdown.options.Count - 1);
-                var selectedText = dropdown.options[selectedIndex].text;
-                captionText = CreateTextChild(nodeObject.transform, "Label", new WebVisualText
-                {
-                    content = selectedText,
-                    fontSize = 16f,
-                    alignment = "center"
-                }, false);
-            }
-
-            dropdown.captionText = captionText;
-            dropdown.RefreshShownValue();
-        }
-
-        static void ConfigureScrollbarChildReferences(GameObject nodeObject)
-        {
-            var scrollbar = nodeObject.GetComponent<Scrollbar>();
-            if (scrollbar == null)
-            {
-                return;
-            }
-
-            var handleRect = FindDescendantRect(nodeObject.transform, "handle", "thumb");
-            if (handleRect == null)
-            {
-                return;
-            }
-
-            scrollbar.handleRect = handleRect;
-            var graphic = handleRect.GetComponent<Graphic>();
-            if (graphic != null)
-            {
-                scrollbar.targetGraphic = graphic;
             }
         }
 

@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "extract": "node extract-visual-ui.mjs"
+    "extract": "node extract-visual-ui.mjs",
+    "test": "node --test structure-contract.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1"

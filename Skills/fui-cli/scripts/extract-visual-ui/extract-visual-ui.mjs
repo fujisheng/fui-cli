@@ -1,3 +1,4 @@
+import { normalizeStructure } from './structure-contract.mjs';
 import { chromium } from '@playwright/test';
 import { statSync } from 'node:fs';
 import { access, mkdir, writeFile } from 'node:fs/promises';
@@ -198,12 +199,23 @@ const plan = await page.evaluate(({ width, height, viewName }) => {
     switch ((webType || '').toLowerCase()) {
       case 'button':
         return 'ButtonElement';
+      case 'inputfield':
       case 'input':
         return 'InputFieldElement';
       case 'toggle':
         return 'ToggleElement';
       case 'text':
         return 'TextElement';
+      case 'rawimage': return 'RawImage';
+      case 'rectmask2d': return 'RectMask2D';
+      case 'togglegroup': return 'ToggleGroup';
+      case 'canvasgroup': return 'CanvasGroup';
+      case 'horizontallayoutgroup': return 'HorizontalLayoutGroup';
+      case 'verticallayoutgroup': return 'VerticalLayoutGroup';
+      case 'gridlayoutgroup': return 'GridLayoutGroup';
+      case 'contentsizefitter': return 'ContentSizeFitter';
+      case 'aspectratiofitter': return 'AspectRatioFitter';
+      case 'layoutelement': return 'LayoutElement';
       case 'container':
       case 'panel':
         return 'Container';
@@ -230,13 +242,12 @@ const plan = await page.evaluate(({ width, height, viewName }) => {
         return 'DropdownElement';
       case 'scrollbar':
         return 'ScrollbarElement';
-      case 'image':
-      default:
-        return 'ImageElement';
+      case 'image': return 'ImageElement';
+      default: throw new Error(`unsupported_ui_type: ${webType}`);
     }
   };
 
-  const elements = Array.from(document.querySelectorAll('[data-ui-id]'));
+  const elements = Array.from(document.querySelectorAll('[data-ui-id]')).filter(el => !el.closest('[data-ui-preview-only="true"], [data-ui-implementation="true"]'));
   const records = elements.map((element) => {
     const rect = element.getBoundingClientRect();
     const style = window.getComputedStyle(element);
@@ -261,6 +272,14 @@ const plan = await page.evaluate(({ width, height, viewName }) => {
         webType,
         element: mapElement(webType),
         component: element.dataset.uiComponent || '',
+        control: element.dataset.uiOptions ? JSON.parse(element.dataset.uiOptions) : {},
+        layout: element.dataset.uiLayout ? JSON.parse(element.dataset.uiLayout) : {},
+        owner: element.dataset.uiOwner || '',
+        part: element.dataset.uiPart || '',
+        binding: element.dataset.uiBinding || '',
+        targetGraphic: element.dataset.uiTarget || '',
+        hitRegion: element.dataset.uiHitRegion === 'true',
+        clip: element.dataset.uiClip === 'true',
         rect: {
           x: clamp(rect.left),
           y: clamp(rect.top),
@@ -272,7 +291,9 @@ const plan = await page.evaluate(({ width, height, viewName }) => {
           textColor: rgbToHex(color),
           sprite: element.dataset.uiSprite || '',
           imageType: element.dataset.imageType || 'simple',
-          alpha: clamp(alphaFromColor(backgroundColor, style.opacity)),
+          spriteBorder: element.dataset.spriteBorder ? element.dataset.spriteBorder.split(',').map(Number) : null,
+          pixelsPerUnitMultiplier: readNumberData('pixelsPerUnitMultiplier', 1),
+          alpha: element.dataset.spriteAlpha ? readNumberData('spriteAlpha', 1) : clamp(alphaFromColor(backgroundColor, style.opacity)),
           opacity: clamp(toNumber(style.opacity) || 1),
           borderRadius: clamp(toNumber(style.borderTopLeftRadius)),
           contentWidth: clamp(element.scrollWidth || rect.width),
@@ -360,6 +381,8 @@ const plan = await page.evaluate(({ width, height, viewName }) => {
     nodes: roots
   };
 }, { ...viewport, viewName });
+
+normalizeStructure(plan);
 
 await mkdir(path.dirname(outputJson), { recursive: true });
 await mkdir(path.dirname(outputScreenshot), { recursive: true });

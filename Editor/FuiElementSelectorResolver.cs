@@ -69,6 +69,26 @@ namespace FUI.Cli
             var rootElement = view.GetElement(parsed.element, typeof(IElement));
             if (rootElement == null)
             {
+                // Native UGUI controls and decorative graphics intentionally have no FUI
+                // wrapper. Resolve a unique authored node within this view, without changing
+                // list/item selector semantics or adding components merely for inspection.
+                if (!parsed.itemIndex.HasValue && string.IsNullOrEmpty(parsed.child))
+                {
+                    var viewRoot = UIElementInspectorHelpers.GetViewGameObject(viewEntity);
+                    var native = viewRoot == null ? Array.Empty<RectTransform>() : viewRoot.GetComponentsInChildren<RectTransform>(true)
+                        .Where(t => t.name == parsed.element && t.GetComponentsInParent<MonoBehaviour>(true).OfType<IView>().FirstOrDefault() == view).ToArray();
+                    if (native.Length == 1)
+                    {
+                        selection = CreateSelection(parsed, viewEntity, view, null, native[0], null);
+                        error = null;
+                        return true;
+                    }
+                    if (native.Length > 1)
+                    {
+                        error = ToolResult.Error("ambiguous_selector", "Multiple native UI nodes match the selector.", new { selector = parsed.ToData(), candidates = native.Select(t => GetGameObjectPath(t.gameObject)).ToArray() });
+                        return false;
+                    }
+                }
                 error = ToolResult.Error("selector_element_not_found", $"元素 '{parsed.element}' 未在视图 '{parsed.view}' 中找到。", new
                 {
                     selector = parsed.ToData(),

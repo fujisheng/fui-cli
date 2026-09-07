@@ -43,7 +43,8 @@ Options:
 Rules:
   This tool only post-processes bitmap files created by imagegen.
   It does not create final art, does not use a full-screen design as UI, and does not edit Unity prefabs.
-  Use alphaSource/repairedAsset/aiChromaSource to adopt imagegen repaired assets into assets_png.
+  Native alpha is preserved by default. Chroma processing and trim must be explicit.
+  Set transparent: true to require real transparency; alphaSourceKind describes the selected input.
 `);
 };
 
@@ -70,7 +71,7 @@ const pythonCommand = readArg('--python') || 'python';
 const dryRun = hasFlag('--dry-run');
 const assetFilters = readRepeatedArg('--asset');
 const manifestDir = path.dirname(manifestPath);
-const reportPath = resolveReportPath(readArg('--report') || path.join(manifestDir, 'asset-generation-log.json'));
+const reportPath = resolveReportPath(readArg('--report') || path.join(manifestDir, 'asset-processing-report.json'));
 const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
 const assets = Array.isArray(manifest.assets) ? manifest.assets : [];
 
@@ -100,14 +101,20 @@ const report = {
   results
 };
 
-await mkdir(path.dirname(reportPath), { recursive: true });
-await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+// 后处理报告与生成来源记录分开；dry-run 不写资源，也不改写报告。
+if (!dryRun) {
+  await mkdir(path.dirname(reportPath), { recursive: true });
+  await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+}
 
 console.log(JSON.stringify(report, null, 2));
 process.exit(report.ok ? 0 : 1);
 
 async function processAsset(asset) {
   const id = resolveAssetId(asset);
+  if (asset.transparent !== undefined && typeof asset.transparent !== 'boolean') {
+    return { id, ok: false, error: 'invalid_transparent', message: 'transparent 必须是布尔值。' };
+  }
   const source = resolveAssetSource(asset);
   const tempOutput = resolveAssetPath(asset.file || asset.tempPath || asset.output || asset.path);
   const finalOutput = resolveAssetPath(asset.path || asset.output || asset.tempPath || asset.file);
@@ -129,23 +136,28 @@ async function processAsset(asset) {
       message: '找不到输出路径。请在 asset.file、asset.tempPath 或 asset.path 中提供路径。'
     };
   }
+  if ([tempOutput, finalOutput].some((output) => output && path.resolve(output) === path.resolve(source))) {
+    return { id, ok: false, error: 'source_overwrite', message: '输出不能覆盖输入原图。' };
+  }
 
   const size = asset.size || {};
   const width = Number(asset.width || size.width || 0);
   const height = Number(asset.height || size.height || 0);
   const alphaMode = resolveAlphaMode(asset);
+  const alphaSourceKind = asset.alphaSourceKind
+    ?? (alphaMode.startsWith('chroma') ? 'chroma' : (asset.transparent ? 'native' : 'opaque'));
   const fit = asset.fit || asset.process?.fit || 'stretch';
   const padding = Number(asset.padding || asset.process?.padding || 0);
-  const alphaThreshold = Number(asset.alphaThreshold || asset.process?.alphaThreshold || 8);
-  const chromaThreshold = Number(asset.chromaThreshold || asset.process?.chromaThreshold || 28);
+  const alphaThreshold = Number(asset.alphaThreshold ?? asset.process?.alphaThreshold ?? 8);
+  const chromaThreshold = Number(asset.chromaThreshold ?? asset.process?.chromaThreshold ?? 28);
   const chroma = asset.chroma || asset.process?.chroma || {};
   const chromaKeyColor = asset.chromaKeyColor || chroma.keyColor || '';
-  const chromaAutoKey = asset.chromaAutoKey || chroma.autoKey || (asset.aiChromaSource ? 'border' : 'corners');
-  const transparentThreshold = Number(asset.transparentThreshold || chroma.transparentThreshold || 18);
-  const opaqueThreshold = Number(asset.opaqueThreshold || chroma.opaqueThreshold || 180);
+  const chromaAutoKey = asset.chromaAutoKey || chroma.autoKey || 'none';
+  const transparentThreshold = Number(asset.transparentThreshold ?? chroma.transparentThreshold ?? 18);
+  const opaqueThreshold = Number(asset.opaqueThreshold ?? chroma.opaqueThreshold ?? 180);
   const edgeContract = Number(asset.edgeContract || chroma.edgeContract || 0);
   const edgeFeather = Number(asset.edgeFeather || chroma.edgeFeather || 0);
-  const despill = Boolean(asset.despill || chroma.despill || alphaMode.startsWith('chroma-soft'));
+  const despill = Boolean(asset.despill ?? chroma.despill ?? false);
   const maxChromaResidueRatio = Number(
     asset.maxChromaResidueRatio
     ?? chroma.maxResidueRatio
@@ -159,6 +171,7 @@ async function processAsset(asset) {
     '--output', tempOutput,
     '--fit', fit,
     '--alpha-mode', alphaMode,
+    '--alpha-source-kind', alphaSourceKind,
     '--padding', String(padding),
     '--alpha-threshold', String(alphaThreshold),
     '--chroma-threshold', String(chromaThreshold),
@@ -169,6 +182,10 @@ async function processAsset(asset) {
     '--edge-feather', String(edgeFeather),
     '--max-chroma-residue-ratio', String(maxChromaResidueRatio)
   ];
+
+  if (asset.transparent) {
+    commandArgs.push('--alpha-required');
+  }
 
   if (chromaKeyColor) {
     commandArgs.push('--chroma-key-color', chromaKeyColor);
@@ -220,6 +237,8 @@ async function processAsset(asset) {
     path: finalOutput ? toProjectRelative(finalOutput) : '',
     fit,
     alphaMode,
+    alphaSourceKind,
+    transparent: asset.transparent ?? false,
     generationMode: asset.generationMode || '',
     aiEditScope: asset.aiEditScope || '',
     repairedAsset: asset.repairedAsset ? toProjectRelative(resolveAssetPath(asset.repairedAsset)) : '',
@@ -233,31 +252,8 @@ function resolveAlphaMode(asset) {
     return asset.alphaMode || asset.process.alphaMode;
   }
 
-  if (!asset.transparent) {
-    return 'keep';
-  }
-
-  if (asset.alphaSource || asset.aiAlphaSource) {
-    return 'trim';
-  }
-
-  if (asset.aiChromaSource || isChromaRepairedAsset(asset)) {
-    return 'chroma-soft-trim';
-  }
-
-  return 'trim';
-}
-
-function isChromaRepairedAsset(asset) {
-  if (!asset.repairedAsset) {
-    return false;
-  }
-
-  if (asset.chroma || asset.chromaKeyColor) {
-    return true;
-  }
-
-  return `${asset.repairedAsset}`.replaceAll('\\', '/').includes('ai_chroma_sources/');
+  // 不靠文件夹、字段别名或纯色参数猜测背景；默认保留布局边距与半透明像素。
+  return asset.alphaSourceKind === 'chroma' ? 'chroma-soft' : 'keep';
 }
 
 function runProcess(command, commandArgs) {
@@ -273,6 +269,9 @@ function runProcess(command, commandArgs) {
     });
     child.stderr.on('data', (chunk) => {
       stderr += chunk.toString();
+    });
+    child.on('error', (error) => {
+      resolve({ code: 1, stdout, stderr: error.message });
     });
     child.on('close', (code) => {
       resolve({ code, stdout, stderr });
@@ -329,13 +328,19 @@ function resolveAssetSource(asset) {
     asset.aiChromaSource,
     asset.source,
     asset.rawPath,
-    asset.input,
-    inferRawAssetPath(asset),
-    asset.tempPath,
-    asset.path
+    asset.input
   ];
 
+  // 显式来源不存在时拒收，不能静默换成旧产物而生成虚假的成功报告。
   for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+    const resolved = resolveAssetPath(candidate);
+    return resolved && existsSync(resolved) ? resolved : '';
+  }
+
+  for (const candidate of [inferRawAssetPath(asset), asset.tempPath, asset.path]) {
     const resolved = resolveAssetPath(candidate);
     if (resolved && existsSync(resolved)) {
       return resolved;

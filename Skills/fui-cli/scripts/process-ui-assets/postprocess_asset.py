@@ -40,14 +40,20 @@ def parse_args() -> argparse.Namespace:
         help="透明处理模式",
     )
     parser.add_argument(
+        "--alpha-source-kind",
+        choices=("native", "chroma", "opaque"),
+        help="实际输入来源；省略时按显式扣色模式或透明要求确定，不根据目录猜测",
+    )
+    parser.add_argument("--alpha-required", action="store_true", help="输入/输出必须满足真实透明契约")
+    parser.add_argument(
         "--chroma-key-color",
         default="",
-        help="可选 chroma key 颜色，例如 #ff00ff。省略时从角落或边框采样。",
+        help="chroma key 颜色，例如 #ff00ff。自动采样必须显式开启。",
     )
     parser.add_argument(
         "--chroma-auto-key",
         choices=("corners", "border", "none"),
-        default="corners",
+        default="none",
         help="未指定 --chroma-key-color 时的 key 色采样方式。",
     )
     parser.add_argument(
@@ -80,6 +86,23 @@ def parse_args() -> argparse.Namespace:
 
 
 def validate_args(args: argparse.Namespace) -> None:
+    chroma = args.alpha_mode.startswith("chroma")
+    if args.alpha_source_kind is None:
+        args.alpha_source_kind = "chroma" if chroma else ("native" if args.alpha_required else "opaque")
+    if (args.alpha_source_kind == "chroma") != chroma:
+        raise SystemExit("alpha source kind 与 alpha mode 冲突；扣色输入必须显式使用 chroma 模式。")
+    if args.alpha_source_kind == "opaque" and args.alpha_required:
+        raise SystemExit("opaque 输入不能满足透明要求，请重新生成或显式选择 chroma 兜底。")
+    if chroma and not args.chroma_key_color and args.chroma_auto_key == "none":
+        raise SystemExit("扣色必须指定 --chroma-key-color 或显式开启 --chroma-auto-key。")
+    if not chroma and (args.chroma_key_color or args.chroma_auto_key != "none" or args.max_chroma_residue_ratio >= 0):
+        raise SystemExit("非扣色输入不能启用扣色参数或残留校验。")
+    if not args.alpha_mode.startswith("chroma-soft") and (args.edge_contract or args.edge_feather or args.despill):
+        raise SystemExit("边缘收缩、羽化和 despill 仅用于显式 chroma-soft 模式。")
+    if args.padding and "trim" not in args.alpha_mode:
+        raise SystemExit("--padding 仅用于显式 trim 模式。")
+    if (args.alpha_required or args.alpha_source_kind == "native") and Path(args.output).suffix.lower() not in (".png", ".webp"):
+        raise SystemExit("透明资源输出必须使用 PNG 或 WebP。")
     if args.width < 0 or args.height < 0:
         raise SystemExit("--width/--height 不能为负数。")
 
@@ -186,7 +209,7 @@ def resolve_key_colors(image: Image.Image, args: argparse.Namespace) -> list[tup
         return [explicit]
 
     if args.chroma_auto_key == "none":
-        return corner_colors(image)
+        raise SystemExit("未指定 key color，且自动采样未开启。")
 
     if args.chroma_auto_key == "border":
         colors = border_colors(image)
@@ -323,6 +346,29 @@ def alpha_coverage(image: Image.Image, threshold: int) -> float:
     return round(visible / total, 6) if total > 0 else 0.0
 
 
+def alpha_statistics(image: Image.Image) -> dict:
+    """统计真实 Alpha，而不是把 RGBA 文件模式误当成透明质量证明。"""
+    alpha = image.getchannel("A")
+    histogram = alpha.histogram()
+    minimum, maximum = alpha.getextrema()
+    return {
+        "min": minimum,
+        "max": maximum,
+        "transparentPixels": histogram[0],
+        "semiTransparentPixels": sum(histogram[1:255]),
+        "opaquePixels": histogram[255],
+    }
+
+
+def alpha_errors(image: Image.Image, required: bool, stage: str) -> list[str]:
+    minimum, maximum = image.getchannel("A").getextrema()
+    if maximum == 0:
+        return [f"{stage}: image is fully transparent"]
+    if required and minimum == 255:
+        return [f"{stage}: transparency required but image is fully opaque"]
+    return []
+
+
 def chroma_residue(image: Image.Image, args: argparse.Namespace) -> dict:
     key = average_color(resolve_key_colors(image, args))
     residue_count = 0
@@ -361,6 +407,10 @@ def report_for(
         "dryRun": bool(args.dry_run),
         "fit": args.fit,
         "alphaMode": args.alpha_mode,
+        "alphaSourceKind": args.alpha_source_kind,
+        "alphaRequired": args.alpha_required,
+        "sourceAlpha": alpha_statistics(original),
+        "outputAlpha": alpha_statistics(processed),
         "originalSize": {"width": original.width, "height": original.height},
         "outputSize": {"width": processed.width, "height": processed.height},
         "alphaBounds": None
@@ -387,8 +437,16 @@ def main() -> int:
     output = Path(args.output)
     if not source.is_file():
         raise SystemExit(f"输入文件不存在：{source}")
+    if source.resolve() == output.resolve():
+        raise SystemExit("输出不能覆盖输入原图，请指定独立的生产资源路径。")
 
-    original = Image.open(source).convert("RGBA")
+    with Image.open(source) as source_image:
+        source_mode = source_image.mode
+        original = source_image.convert("RGBA")
+    # 必须先验原图，不能让 contain/padding 新增的透明画布掩盖伪透明输入。
+    errors = alpha_errors(original, args.alpha_source_kind == "native", "source")
+    if errors:
+        return reject_alpha(args, source, output, original, original, source_mode, errors)
     processed = original.copy()
 
     if args.alpha_mode in ("chroma", "chroma-trim"):
@@ -402,6 +460,10 @@ def main() -> int:
 
     processed = resize_image(processed, args.width, args.height, args.fit)
     data = report_for(source, output, original, processed, args)
+    data["sourceMode"] = source_mode
+    errors = alpha_errors(processed, args.alpha_required or args.alpha_source_kind == "native", "output")
+    if errors:
+        return reject_alpha(args, source, output, original, processed, source_mode, errors)
     residue = data.get("chromaResidue")
     if residue and not residue["ok"]:
         raise SystemExit(
@@ -409,6 +471,8 @@ def main() -> int:
             f"{residue['ratio']} > {residue['maxRatio']}，key={residue['keyColor']}"
         )
 
+    data["ok"] = True
+    data["validationErrors"] = []
     if not args.dry_run:
         output.parent.mkdir(parents=True, exist_ok=True)
         processed.save(output)
@@ -418,6 +482,16 @@ def main() -> int:
 
     print(json.dumps(data, ensure_ascii=False))
     return 0
+
+
+def reject_alpha(args, source, output, original, processed, source_mode, errors) -> int:
+    """失败仅写诊断，不写入或覆盖资源；报告不能替代边缘与棋盘格目视检查。"""
+    data = report_for(source, output, original, processed, args)
+    data.update(ok=False, sourceMode=source_mode, validationErrors=errors)
+    if args.report:
+        write_json(Path(args.report), data)
+    print(json.dumps(data, ensure_ascii=False))
+    return 1
 
 
 if __name__ == "__main__":

@@ -2,8 +2,8 @@
 name: fui-cli
 description: 使用 FUI CLI 与 UnityCli 进行 FUI 运行态检查、交互诊断、ViewModel/元素状态修改，以及 Web 原型到 UGUI/FUI prefab 的正式工具链工作流
 license: MIT
-compatibility: opencode
 metadata:
+  clients: codex, opencode
   audience: developers
   workflow: unity-ui, fui, runtime-inspection, diagnostics, web-to-ugui-prefab
   aliases: fui cli, fui workflow, fui runtime, fui diagnostics, fui-cli, web to ugui, web prefab
@@ -28,7 +28,7 @@ metadata:
 
 **不要把确认稿或设计图当整屏主视觉 Sprite。** `design-master.png` 和用户确认稿只能作为参考图，禁止作为 prefab 的整屏背景图来显示完整 UI，也禁止在其上叠透明按钮/协议区/点击热区。prefab 必须由 `asset-manifest.json` 中的独立资源图拼装；拼不准就重新生成或修正对应资源图。
 
-**默认直接采用 imagegen 修补后的独立资源。** 资源拆分流程必须先用代码从 `design-master.png` 裁出 `Source Crop`、生成 `cutout`、`repair_mask`、`edit_target` 和报告；随后由 Codex `imagegen` 修复遮挡、文字、缺失和破边区域。需要透明的修补资源必须要求 imagegen 输出到纯色 chroma-key 背景（默认 `#ff00ff`），再由代码扣色生成 alpha。修补后的完整资源可以作为 `assets_png` 中的 Production Asset，代码只允许做尺寸对齐、alpha/透明边处理、chroma key、预览和校验。`Source Crop` 是修复参考和抠图基底，不再默认要求把 donor 局部回贴到原图；只有在需要严格锁定可见像素、AI 明显跑偏或用户明确要求时，才使用 Source-First Composition 作为回退策略。
+**默认直接采用 imagegen 修补后的独立资源，透明资源优先原生 Alpha。** 资源拆分先从 `design-master.png` 裁出 `Source Crop` 并准备修复所需 mask、`edit_target` 和报告，再用 Codex `imagegen` 清理遮挡、文字、缺失和破边。需要透明时明确要求真实透明 PNG，而不是棋盘格图片；默认保留原始 Alpha 和画布边距，不自动扣色、裁边、收缩、羽化或 despill。透明失败时优先重新生成或编辑，必要时显式声明 chroma 兜底并记录原因。脚本必须检查实际原图与最终输出，不能把 RGBA 格式或新增透明留白当成验收通过。详细契约见 `references/asset-generation-workflow.md` 第 9.6 节及后处理脚本 README。通过校验的独立资源可以直接作为 `assets_png` 中的 Production Asset；Source-First Composition 仅用于严格锁像素、AI 跑偏或用户明确要求的回退场景。
 
 **裁图边界必须以设计图确认为准。** HTML / `visual-ui.json` 的元素 rect 只表示运行时布局、语义和交互热区，不能直接作为最终资源裁切框或资源尺寸。进入 `Source Crop` 裁切前，必须用 `bbox-review.html` 把 `design-master.png` 作为 1:1 背景，叠加 `html_rect` 与可调整的 `design_visual_bbox`；执行者调整到完整包含描边、阴影、发光、圆角、外扩装饰和透明边缘，并让用户确认后，才允许把 `design_visual_bbox` / `source_crop_bbox` 写入 `layer_plan.json` 并进入后续 imagegen 流程。
 
@@ -37,6 +37,8 @@ metadata:
 **bbox 改变后必须重新生成资源链路。** 一旦 `design_visual_bbox` / `source_crop_bbox` 调整，旧 `Source Crop`、mask、`edit_target`、imagegen 输出、`alphaSource` 和 `asset-manifest.json.size` 都视为过期。复用旧 AI 输出再缩放只能用于临时验证问题，不能作为最终交付资源；最终必须基于新的 `Source Crop` 重新跑 imagegen 修复和后处理。
 
 ## 文档索引
+
+本技能的维护源是 `Packages/fui-cli/Skills/fui-cli/`；`.agents/skills/fui-cli/` 和 `.opencode/skills/fui-cli/` 是安装副本。修改流程时同步副本并校验文件哈希，不在副本中另行维护一套规则。安装可通过 `FUI/Install Skill` 完成。
 
 按需跳文档，不要一次加载全部：
 
@@ -48,3 +50,13 @@ metadata:
 | 从设计图生成 UI 精灵资源 | `@references/asset-generation-workflow.md` |
 | 运行时接入与 PlayMode 验证 | `@references/runtime-bootstrap.md` |
 | 验证流程与排障指南 | `@references/verification-and-troubleshooting.md` |
+
+## 生成前结构检查
+
+Web → Prefab 必须遵守 `references/semantic-structure.md`：保留控件部件父子关系，装饰显式标记，九宫格导出单个语义 Image。结构验证失败先修 HTML，再重新提取，不能跳过检查或手改 JSON。
+
+基础控件必须按语义结构规范的 UGUI 控件表声明部件。Slider、Toggle、InputField、Dropdown、ScrollView、Scrollbar 缺少必要角色时必须在生成前失败；禁止按名字猜测部件、自动补出重复结构或用业务脚本弥补错误层级。基础控件修改后执行 Node 结构测试与 Unity `FUI/Validate UGUI Control Structure`，确认正式 HTML 提取/预检也通过。
+
+## 布局、列表与适配
+
+Web → Prefab 同时遵守 `references/layout-contract.md`。固定项声明 LayoutGroup，动态记录使用 Item 模板与集合绑定；可适配区域声明锚点、安全区与尺寸归属。不能以父子结构检查或单尺寸截图代替列表和多比例 Unity 验证。

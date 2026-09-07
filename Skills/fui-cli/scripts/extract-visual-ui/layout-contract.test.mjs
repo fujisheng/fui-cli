@@ -1,0 +1,10 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {validateLayout} from './layout-contract.mjs';
+test('stretch anchors preserve valid intervals',()=>validateLayout({id:'fill',layout:{mode:'anchored',anchorMin:[0,0],anchorMax:[1,1]}}));
+test('layout rejects competing child positioning',()=>assert.throws(()=>validateLayout({id:'rows',layout:{group:'vertical'},children:[{id:'row',layout:{mode:'free'}}]}),/competing/));
+test('managed item requires parent layout',()=>assert.throws(()=>validateLayout({id:'row',layout:{mode:'managed'}}),/parent layout/));
+test('managed item cannot drive own height',()=>assert.throws(()=>validateLayout({id:'rows',layout:{group:'vertical'},children:[{id:'row',layout:{mode:'managed',contentHeight:true}}]}),/both own/));
+test('content fitter can own height of a top anchored group',()=>validateLayout({id:'content',layout:{mode:'anchored',anchorMin:[0,1],anchorMax:[1,1],group:'vertical',contentHeight:true},children:[{id:'row',layout:{mode:'managed'}}]}));
+test('decorative backing can ignore parent layout',()=>validateLayout({id:'rows',layout:{group:'vertical'},children:[{id:'backing',layout:{ignore:true}}]}));
+test('inverted anchors fail before import',()=>assert.throws(()=>validateLayout({id:'bad',layout:{mode:'anchored',anchorMin:[1,0],anchorMax:[0,1]}}),/invalid anchors/));

@@ -1,8 +1,8 @@
 # SPEC: FUI 设计图资源化与 Web 拼装校验
 
 Status: Accepted
-Version: 2.5
-Last Updated: 2026-05-15
+Version: 2.6
+Last Updated: 2026-09-05
 Owner: fui-cli workflow
 
 ## 1. Intent
@@ -13,7 +13,7 @@ Owner: fui-cli workflow
 
 本流程明确不生成 PSD，也不以 PSD 作为校验对象。
 
-资源生成默认采用“`Source Crop` 作为修复参考 → Codex `imagegen` 生成干净独立资源 → chroma-key/alpha/尺寸后处理 → `assets_png/` 直接采用修复结果”的路线。`Source Crop` 不再默认作为最终像素主体；它用于锁定形状、风格、比例、遮挡关系、mask 和验收对照。
+资源生成默认采用“整体设计 → `Source Crop` 修复参考 → Codex `imagegen` 生成独立资源（透明资源优先原生 Alpha）→ 原图与输出的 Alpha / 尺寸校验 → `assets_png/` → Web 拼装 → Unity 验收”的路线。扣色只作显式兜底，不默认裁边或损伤半透明边缘。`Source Crop` 用于锁定形状、风格、比例、遮挡关系、mask 和验收对照。
 
 ### 1.1 Result
 
@@ -24,8 +24,9 @@ Owner: fui-cli workflow
 - `bbox-review-data.json`：在设计图上确认过的资源真实视觉边界。
 - `previews/<ViewName>.bbox-review.html`：以 `design-master.png` 为 1:1 背景的 bbox 可视化确认页。
 - `debug/*_visible_mask.png` / `debug/*_repair_mask.png`：可见锁定区与允许修复区。
-- `ai_chroma_sources/`：Codex `imagegen` 输出的纯色 chroma-key 修复源。
-- `ai_alpha_sources/`：从 chroma-key 修复源扣色得到的 alpha 源；若透明资源直接使用 true-alpha 输出，也放在这里。
+- `ai_alpha_sources/`：透明资源的原生 Alpha 输出；扣色兜底时也可保存处理后的 Alpha 源，必须记录来源区别。
+- `ai_chroma_sources/`：仅扣色兜底时保存纯色背景原图；没有使用该分支时无需生成此目录或中间图。
+- `asset-processing-report.json`：后处理机器报告，与保存 prompt、来源和重试历史的 `asset-generation-log.json` 分开。
 - `previews/<ViewName>.resource-preview.html`：只引用 `assets_png/` 的 Web 拼装预览。
 - `previews/web-composited.png`：浏览器渲染 Web 拼装预览后的截图。
 - `previews/web-vs-master-diff.png`：Web 拼装结果与 `design-master.png` 的对比图。
@@ -54,7 +55,7 @@ Owner: fui-cli workflow
 - 生成资源拆分确认图 `extraction_plan_overlay.png`。
 - 从设计图裁切 `sources/` 参考图。
 - 使用 Codex `imagegen` 修复、补绘或生成独立 UI 资源。
-- 对 imagegen 输出做 chroma key、alpha 清理、bbox 对齐和尺寸校验。
+- 对 imagegen 输出做 Alpha 校验、bbox 对齐和尺寸处理；仅显式兜底时扣色和清理色边。
 - 生成只由 `assets_png/` 资源拼出的 Web 预览和验证报告。
 - 用户确认后复制资源到 `Assets/Resources/UI/<ViewName>/`。
 - 设置 Unity Sprite Importer，并运行 `ui.web_to_ugui_prefab` dry-run 与正式生成。
@@ -144,7 +145,7 @@ direct repaired asset 的采用条件：
 
 - 它来自当前资源的 `Source Crop`、`repair_mask` / `editTarget` 和明确 prompt。
 - 它是单个独立 sprite，不是整屏 UI 截图，也不包含不属于该资源的运行时文本或交互控件。
-- 透明资源必须先输出到纯色 chroma-key 背景或 true-alpha，再做 alpha 清理、despill、bbox 和残留校验。
+- 透明资源 MUST 优先请求原生 Alpha，按第 9.6 节检查原图与输出；只有显式 chroma 兜底执行扣色、残留校验和按需 despill。
 - 文件已经按目标 bbox 尺寸对齐，并写入 `assets_png/`。
 - `asset-manifest.json`、`layer_plan.json` 或 `asset-generation-log.json` 记录 `generationMode: "direct_repaired_asset"` 和 `aiEditScope: "direct_repaired_asset"`。
 
@@ -255,9 +256,9 @@ direct repaired asset 的采用条件：
 | `Repair Mask`                     | 标记允许 imagegen 或后处理修改的遮挡、缺失、破边、透明边缘区域。                                                                  |
 | `Occluder Mask`                   | 由上层按钮、输入框、文字、图标等遮挡物区域合并得到的 mask。                                                                       |
 | `Hole Source`                     | 把 `Source Crop` 中 `Occluder Mask` 覆盖区域掏空后的修复输入。                                                                |
-| `Direct Repaired Asset`           | imagegen 输出的完整独立 sprite，经 chroma-key、alpha、bbox、尺寸和来源校验后直接进入 `assets_png/`。                            |
-| `Chroma Source`                   | imagegen 输出的纯色背景修复源，默认保存到 `ai_chroma_sources/`。                                                                |
-| `Alpha Source`                    | 从 chroma source 扣色、despill 和 alpha 清理后的中间图，默认保存到 `ai_alpha_sources/`。                                        |
+| `Direct Repaired Asset`           | imagegen 输出的完整独立 sprite，经 Alpha、bbox、尺寸和来源校验后进入 `assets_png/`。 |
+| `Chroma Source`                   | 仅在显式扣色兜底时生成的纯色背景修复源，保存到 `ai_chroma_sources/`。 |
+| `Alpha Source`                    | 原生透明输出，或有明确来源记录的扣色结果；保存到 `ai_alpha_sources/`，不强制重复复制。 |
 | `Patch Donor`                     | Source-First 回退路线中使用的局部补丁图，只能按 `repair_mask` 局部取用。                                                        |
 | `Source-First Composition`        | 以 `Source Crop` 为主体，将 donor 的修复区域局部合成回去的回退生成方式。                                                        |
 | `Locked Pixels`                   | `Visible Mask` 覆盖的源图像素；仅在 strict / source-first 路线中必须覆盖回最终资源。                                            |
@@ -309,7 +310,7 @@ FUI-CLI/<ViewName>/
 ├── asset-generation-log.json
 ├── sources/
 ├── asset_requests/
-├── ai_chroma_sources/
+├── ai_chroma_sources/                 # 仅扣色兜底时存在
 ├── ai_alpha_sources/
 ├── assets_png/
 ├── debug/
@@ -331,8 +332,8 @@ FUI-CLI/<ViewName>/
 - `bbox-review-data.json` MUST 记录已确认或待确认的 `html_rect`、`design_visual_bbox`、`source_crop_bbox`、`hit_rect` 和 `placement_offset`。
 - `sources/` MUST 只包含从 `design-master.png` 按 `source_crop_bbox` 裁出的 `Source Crop`，并作为修复参考、mask 基底和校验输入。
 - `asset_requests/` SHOULD 保存每个资源提交给 imagegen 前的 source、hole、mask、edit target 和 prompt。
-- `ai_chroma_sources/` MUST 保存 imagegen 生成或修复后的纯色背景图。
-- `ai_alpha_sources/` SHOULD 保存 chroma-key 扣色、despill 和 alpha 清理后的中间图。
+- 使用扣色兜底时，`ai_chroma_sources/` MUST 保存生成的纯色背景原图；其他情况不要求此产物。
+- `ai_alpha_sources/` SHOULD 保存原生透明原图或显式扣色后的 Alpha 源；不覆盖原始生成文件，处理链写入报告。
 - `debug/` SHOULD 保存 `visible_mask`、`repair_mask`、`occluder_mask`、`hole_source`、bbox 报告、逐资源相似度和失败样本。
 - `previews/` MUST 只保存 Web 拼装确认和校验产物。
 - `previews/<ViewName>.bbox-review.html` MUST 只用于裁切规划确认，不得作为最终 UI 图层。
@@ -358,7 +359,7 @@ Phase B: Planning
   bbox-review.html + bbox-review-data.json + layer_plan.json + extraction_plan_overlay.png
 
 Phase C: Asset Production
-  sources/ + masks + asset_requests/ + ai_chroma_sources/ + ai_alpha_sources/ + direct repaired assets + assets_png/ + asset-manifest.json
+  sources/ + masks + asset_requests/ + 原生 Alpha 或显式 chroma 兜底 + assets_png/ + asset-manifest.json
 
 Phase D: Web Verification
   resource-preview.html + web-composited.png + diff + coordinate_compare + web-validation.json
@@ -401,11 +402,11 @@ MUST 完成：
 2. 根据资源类型选择 `asset_strategy`，明确每个资源是 `direct_repaired_asset`、source-crop-only 还是回退策略。
 3. 为每个资源生成或确认 `visible_mask`、`repair_mask`；被遮挡资源还必须生成 `occluder_mask` 与 `hole_source`。
 4. 根据 `asset_strategy` 判断哪些资源可走 source-crop-only，哪些必须进入 imagegen 修复。
-5. 需要 AI 的资源生成完整干净独立 sprite，并写入 `ai_chroma_sources/` 或等价目录。
-6. 对透明修复源执行 chroma key、despill、alpha 清理、bbox 和尺寸对齐，必要时写入 `ai_alpha_sources/`。
+5. 需要 AI 的资源生成完整独立 sprite；透明原图写入 `ai_alpha_sources/`，不透明背景保留原始输出路径。只有显式扣色兜底使用 `ai_chroma_sources/`。
+6. 检查原图实际 Alpha，默认 `keep`；按确认过的 bbox/尺寸对齐并检查输出。仅 chroma 分支扣色，裁边、despill、边缘收缩和羽化均按需显式启用。
 7. 默认将通过校验的完整修复资源作为 `direct_repaired_asset` 写入 `assets_png/`。
 8. 仅在 strict 锁像素、AI 输出明显跑偏或用户明确要求时，执行 Source-First Composition 回退。
-9. 执行逐资源校验：尺寸、alpha、chroma-key 残留、runtime text 是否误烤、背景是否含完整 UI。
+9. 执行逐资源校验：原图/输出 Alpha、尺寸、边距、runtime text 是否误烤、背景是否含完整 UI；仅 chroma 分支检查 key color 残留。
 10. 生成或更新 `asset-manifest.json`。
 11. 记录重试、失败原因、mask 路径、修复源路径、alpha 源路径、prompt 摘要和校验结果到 `asset-generation-log.json`。
 
@@ -484,8 +485,8 @@ MUST 完成：
       "visible_mask": "debug/login_panel_visible_mask.png",
       "repair_mask": "debug/login_panel_repair_mask.png",
       "edit_target": "asset_requests/login_panel/edit_target.png",
-      "repaired_asset": "ai_chroma_sources/login_panel.ai.png",
-      "alpha_source": "ai_alpha_sources/login_panel.alpha.png",
+      "repaired_asset": "ai_alpha_sources/login_panel.ai.png",
+      "alpha_source": "ai_alpha_sources/login_panel.ai.png",
       "composition_policy": "direct_repaired_asset",
       "ai_edit_scope": "direct_repaired_asset",
       "similarity_policy": "normal",
@@ -523,8 +524,8 @@ MUST 完成：
 - `visible_mask` SHOULD 指向锁定可见像素 mask；没有 mask 时必须说明如何确定锁定区域。
 - `repair_mask` SHOULD 指向允许补绘或改动的 mask；`repair_required: true` 时 MUST 存在。
 - `edit_target` SHOULD 指向提交给 imagegen 的修复输入图。
-- `repaired_asset` SHOULD 指向 imagegen 修复输出；透明资源通常位于 `ai_chroma_sources/`。
-- `alpha_source` SHOULD 指向 chroma-key 扣色后的 alpha 源；没有透明需求时可省略。
+- `repaired_asset` SHOULD 指向原始 imagegen 修复输出；透明资源优先位于 `ai_alpha_sources/`。
+- `alpha_source` SHOULD 指向可用 Alpha 源；原生透明时可与 `repaired_asset` 相同或省略，不要求扣色中间产物。
 - `patch_donor` 只在 Source-First 回退路线中使用；它不能替代 `repaired_asset`。
 - `composition_policy` MUST 使用 `direct_repaired_asset`、`source_first_patch_only`、`source_crop_only`、`full_redraw_allowed` 之一。
 - `ai_edit_scope` MUST 使用 `none`、`direct_repaired_asset`、`repair_mask_only`、`visible_edge_cleanup`、`full_redraw_allowed` 之一。
@@ -602,11 +603,11 @@ MUST 完成：
       "textPolicy": "noText",
       "priority": 2,
       "transparent": true,
-      "alphaMode": "trim",
+      "alphaSourceKind": "native",
+      "alphaMode": "keep",
       "generationMode": "direct_repaired_asset",
       "sourceCrop": "sources/login_button_source.png",
-      "repairedAsset": "ai_chroma_sources/login_button_normal.ai.png",
-      "alphaSource": "ai_alpha_sources/login_button_normal.alpha.png",
+      "repairedAsset": "ai_alpha_sources/login_button_normal.ai.png",
       "compositionPolicy": "direct_repaired_asset",
       "aiEditScope": "direct_repaired_asset",
       "fullRedrawAllowed": false,
@@ -632,8 +633,11 @@ MUST 完成：
 - `textPolicy` MUST 使用 `noText`、`bitmapAllowed`、`runtimeText` 之一。
 - `generationMode` SHOULD 记录该资源是 `direct_repaired_asset`、`source_crop_exact_png`、`source_crop_alpha_png`、`source_first_patch_only`、`background_underlay_repair`、`runtime_text` 还是 `full_redraw_allowed`。
 - `sourceCrop` SHOULD 指向资源的 `Source Crop`。
-- `repairedAsset` SHOULD 指向 imagegen 修复输出；透明资源通常是 chroma-key 背景图。
-- `alphaSource` SHOULD 指向扣色后的 alpha 源；如果直接使用 true-alpha 修复输出，可与 `repairedAsset` 相同或省略。
+- `transparent` 表示是否要求真实透明，不是生成成功的证明；MUST 为布尔值。
+- `alphaSourceKind` 描述本次实际输入：`native`、`chroma` 或 `opaque`；默认透明资源为 `native`，背景为 `opaque`，显式 chroma 模式则为 `chroma`。不能根据目录名猜测。
+- `alphaMode` 默认 `keep`；显式 `alphaSourceKind: "chroma"` 默认 `chroma-soft`。`trim`、边缘收缩、羽化和 despill 不自动开启；细节见后处理脚本 README。
+- `repairedAsset` SHOULD 指向 imagegen 原始修复输出；透明资源优先原生 Alpha。
+- `alphaSource` SHOULD 指向本次要处理的 Alpha 源；原生透明时可与 `repairedAsset` 相同或省略。使用扣色后的源时，`alphaSourceKind` 是 `native`，生成时的 chroma 来源仍保留在生成日志中。
 - `aiChromaSource` / `aiAlphaSource` MAY 作为 `repairedAsset` / `alphaSource` 的别名字段。
 - `patchDonor` 只在 Source-First 回退路线中使用；source-crop-only 资源可省略。
 - `compositionPolicy` SHOULD 记录最终资源使用 `direct_repaired_asset` 还是 `source_first_patch_only`。
@@ -788,7 +792,7 @@ AI 处理 SHOULD 补齐：
 - 半透明边缘。
 - 阴影、描边、发光等需要独立使用的外扩像素。
 
-AI 输出后默认执行 direct repaired asset 采用流程：对纯色背景输出执行 chroma key、alpha 清理、despill、尺寸和 bbox 对齐；检查没有 runtime text 误烤、没有完整 UI 截图、没有 key color 残留；通过后写入 `assets_png/` 并记录 `generationMode: direct_repaired_asset`。
+AI 输出后按第 9.6 节路由：原生透明默认保留 Alpha，显式纯色兜底才扣色；执行尺寸、bbox 和逐资源校验，检查没有 runtime text 误烤或完整 UI 截图；通过后写入 `assets_png/` 并记录 `generationMode: direct_repaired_asset`。
 
 如果 bbox 修正导致资源尺寸变化，必须基于新的 `Source Crop` 重新调用 imagegen。复用旧 `ai_alpha_sources/` 或旧 `repairedAsset` 后再缩放，只能作为临时验证定位问题，最终验收必须 fail。
 
@@ -831,16 +835,16 @@ asset_requests/<id>/prompt.md
 标准顺序：
 
 1. 从 `Source Crop`、`hole_source`、`repair_mask` 和 `edit_target` 准备 imagegen 输入。
-2. imagegen 输出完整独立 sprite；透明资源输出到纯色 chroma-key 背景。
-3. 把原始输出保存到 `ai_chroma_sources/` 或等价目录。
-4. 对透明资源执行 chroma key、alpha 清理、edge contract、despill 和尺寸对齐；需要追溯时保存到 `ai_alpha_sources/`。
-5. 检查尺寸、alpha bbox、key color 残留、运行时文字误烤、整屏截图误用。
+2. imagegen 输出完整独立 sprite；透明资源优先真实透明 PNG，不绘制棋盘格背景。
+3. 保存原始输出到 `ai_alpha_sources/` 或等价目录；仅显式扣色兜底使用 `ai_chroma_sources/`。
+4. 校验原图并按需对齐尺寸，默认保留 Alpha 和画布边距。chroma 兜底按第 9.6 节执行，不自动收缩边缘。
+5. 检查输出 Alpha、尺寸、bbox、运行时文字误烤、整屏截图误用；仅 chroma 分支检查 key color 残留。
 6. 通过后写入 `assets_png/`，并在 `asset-manifest.json` / `asset-generation-log.json` 记录 `sourceCrop`、`editTarget`、`repairMask`、`repairedAsset`、`alphaSource`、prompt 摘要和 `generationMode: direct_repaired_asset`。
 
 阻断规则：
 
 - `assets_png/` 使用修复输出但未记录 `direct_repaired_asset` 来源、prompt 和校验结果时 MUST fail。
-- 透明资源仍有明显 key color 残留时 MUST fail。
+- 要求透明却全不透明、输出全透明、存在棋盘格伪影或 chroma 分支有明显 key color 残留时 MUST fail。
 - 输出包含不属于该资源的运行时文字、按钮、整屏 UI 或参考图背景时 MUST fail。
 - 输出的形状、颜色、材质、比例与 `Source Crop` 明显不一致时 MUST fail。
 
@@ -865,24 +869,32 @@ asset_requests/<id>/prompt.md
 - `ai_edit_scope: repair_mask_only` 时，`repair_mask` 外出现明显颜色、形状、纹理变化 MUST fail。
 - `similarity_policy: strict` 的资源 SHOULD 让 `lockedPixelDiffCount` 为 0；如果存在抗锯齿或 alpha 量化差异，必须记录阈值和原因。
 
-### 9.6 Chroma Key Transparency
+### 9.6 Native Alpha First, Explicit Chroma Fallback
 
-透明资源 SHOULD 使用纯色背景生成，再扣除纯色背景。
+透明需求、实际输入来源、后处理操作是三个不同概念。manifest 复用 `transparent` 表达需求，`alphaSourceKind` 表达本次实际输入，`alphaMode` 表达操作，不新增重复的透明布尔字段。
 
-推荐流程：
+| 输入 | 推荐配置 | 处理 |
+| --- | --- | --- |
+| 原生透明图 | `transparent: true`、`alphaSourceKind: "native"`、`alphaMode: "keep"` | 保留 Alpha 与画布边距，仅执行已声明的尺寸处理 |
+| 不透明背景 | `transparent: false`、`alphaSourceKind: "opaque"` | 保留，不检查是否存在透明像素 |
+| 显式纯色兜底 | `transparent: true`、`alphaSourceKind: "chroma"`、`alphaMode: "chroma-soft"` | 指定 key color 或显式自动采样，扣色并校验残留 |
 
-1. 用 imagegen 生成元素在纯色背景上的修复图。
-2. 纯色背景使用图中不存在的颜色，例如 `#ff00ff`。
-3. 用 chroma key 工具扣除背景。
-4. 对 alpha 边缘进行收缩、羽化、despill。
-5. 检查是否仍有纯色残留。
+原生 Alpha 默认流程：
 
-扣色后 MUST 检查：
+1. 明确请求真实透明 PNG，保留阴影、辉光与抗锯齿半透明边缘，不绘制棋盘格、不使用纯色底。
+2. 保存生成原图、prompt、来源、采用原因与重试记录。不能覆盖原图；无需制造 chroma 中间图，也无需为了 `alphaSource` 字段复制相同文件。
+3. 处理前检查实际原图：存在可见像素，且 Alpha 不全为 255；RGB 转 RGBA 本身不算透明。必须在 contain/padding 前检查，避免新增留白掩盖不透明原图。
+4. 默认 `keep`，不裁边、不扣色、不收缩、不羽化、不 despill。`keep` 保留透明策略，不代表禁止显式缩放；指定目标尺寸时仍按 `fit` 处理。
+5. 处理后再次检查 Alpha；`transparent: true` 的输出必须含可见像素且不是全不透明。全透明输出一律拒收。PNG/WebP 可保存 Alpha，透明资源不使用 JPEG。
+6. 目视检查浅色、深色与实际界面背景下的合成效果、小尺寸辨识度，以及是否把棋盘格画进 RGB。像素统计不能自动证明这些视觉质量。
 
-- 背景纯色残留像素为 0 或低于项目阈值。
-- 半透明边缘没有明显脏边。
-- 资源阴影没有被误删。
-- `Alpha BBox` 与目标元素边界匹配。
+裁边必须显式选择 `trim`，并同步确认 padding、pivot、placement offset 与九宫格 border。不能为了紧裁而破坏原有布局；裁边后若要求透明的图变成全不透明，应保留原画布或补充设计所需边距，不应关闭验收绕过问题。
+
+只有原生透明失败或有明确资产约束时才使用 chroma 兜底：优先重新生成或编辑；确需扣色时记录原因，生成主体中不存在的纯色（例如 `#ff00ff`），显式声明 `alphaSourceKind: "chroma"`。指定 key color，或显式允许 `corners` / `border` 采样；不根据目录、角落颜色或遗留字段静默切换处理方式。
+
+扣色后 MUST 校验残留比例、阴影与半透明边缘、目标 bbox。边缘收缩、羽化和 despill 只在确有污染时显式开启，不默认启用。原生透明分支不进行 key color 残留校验，避免把主体中的合法颜色误判为背景。
+
+机器报告保存实际输入路径、处理策略、输入/输出 Alpha 统计和失败原因。来源及 prompt 记录保存在 `asset-generation-log.json`，后处理默认写 `asset-processing-report.json`，不相互覆盖。透明能力不替代素材原创性和授权检查。
 
 ### 9.7 BBox Alignment
 
@@ -1015,7 +1027,7 @@ fui-resource-pipeline
 | 直接用 HTML rect 裁图                         | 标记为阻断问题；HTML rect 只能作为布局/热区参考，必须重新执行 bbox review。                                                                                                                             |
 | `visual-ui.json` 被写入设计 bbox            | 恢复原始提取文件；把设计 bbox 写入 `layer_plan.json` / `bbox-review-data.json`；如需改变 prefab 尺寸，生成 `<ViewName>.visual-ui.recut.json`。                                                    |
 | bbox 变化后复用旧 AI 输出                     | 只能保留为验证记录；重新基于新 `Source Crop` 生成 imagegen 输入、修复资源和 alpha 源。                                                                                                                |
-| AI 输出偏离设计图                             | 降低重绘范围，改为局部修复；使用纯色背景重新生成；对比 `Source Crop` 修正颜色、形状和边缘。                                                                                                           |
+| AI 输出偏离设计图                             | 降低重绘范围，改为局部修复；对比 `Source Crop` 修正颜色、形状和边缘。背景处理按第 9.6 节选择，不默认退回纯色。 |
 | imagegen 输出像重新生成                       | 先对比 `Source Crop`、目标语义和用户确认图；若仍是干净、完整且可接受的独立 sprite，可记录为 `direct_repaired_asset` 并继续校验；若形状、材质或语义偏离，则重新生成或退回 Source-First Composition。 |
 | AI 修改了锁定可见像素                         | 丢弃该次输出或将 `Source Crop` 的 `visible_mask` 区域覆盖回最终图；收紧 prompt、`repair_mask` 和 `ai_edit_scope`；重新跑逐资源相似度。                                                          |
 | 逐资源相似度失败                              | 不进入 Web 拼装；优先切换为 `source_crop_alpha_png` 或 `source_crop_with_repaired_edge`；只对失败区域做局部补绘。                                                                                   |
@@ -1044,7 +1056,7 @@ fui-resource-pipeline
 - 每个独立资源都有基于 `source_crop_bbox` 裁出的 `Source Crop`；需要修复的资源有 `repair_mask`、`editTarget`、`repairedAsset` 和采用说明。
 - bbox 修正过的资源已基于新 `Source Crop` 重新执行 imagegen 修复；没有把旧 AI 输出缩放后作为最终资源。
 - 被遮挡且需要独立使用的资源有 `occluder_mask` 和 `hole_source`。
-- 需要透明的修复资源已从 `ai_chroma_sources/` 或 true-alpha 源生成 `alphaSource`，并通过 chroma 残留校验。
+- 透明资源原图与输出均已按第 9.6 节验收；原生 Alpha 不要求扣色中间图，只有 chroma 兜底需要残留校验。
 - `assets_png/` 可采用通过校验的 `direct_repaired_asset`；Source-First Composition 只用于 strict 锁像素、AI 跑偏或用户明确要求的回退场景。
 - strict / source-first 资源的锁定可见区域已经按 `Source Crop` 校验，`assetSimilarity` 没有阻断项。
 - 每个正式资源都在 `assets_png/`。
@@ -1081,7 +1093,9 @@ fui-resource-pipeline
 - [ ] 需要修复的资源都有 `repair_mask`、`edit_target`、`repaired_asset` 和采用说明。
 - [ ] 被遮挡且需要独立使用的资源都有 `occluder_mask` 和 `hole_source`。
 - [ ] imagegen 修复输出按 `direct_repaired_asset` 或 Source-First 回退路线记录清楚。
-- [ ] 采用 `direct_repaired_asset` 的资源已执行 chroma/alpha、bbox、尺寸、来源和 runtime text 校验。
+- [ ] 采用 `direct_repaired_asset` 的资源已执行原图/输出 Alpha、bbox、尺寸、来源和 runtime text 校验；chroma 残留仅检查扣色分支。
+- [ ] 默认保留原生 Alpha 和边距；显式 trim 已检查 pivot、placement offset 与九宫格 border。
+- [ ] 生成来源日志与后处理报告分开保存，未覆盖原图与 prompt 记录。
 - [ ] Source-First 回退资源已执行局部合成和锁定像素校验。
 - [ ] `preserve_visible_pixels`、`ai_edit_scope`、`similarity_policy` 已明确。
 - [ ] 被遮挡但需要独立使用的元素已标记补绘。
@@ -1113,10 +1127,11 @@ Repair the masked missing, occluded, broken, text-contaminated, or transparent-e
 Keep visible unmasked areas visually consistent with the source crop unless cleanup is required.
 Keep the original shape, color, bevel, shadow, glow, texture, and proportions.
 Reconstruct missing or occluded edges so the sprite can be used alone in Unity.
-Place the repaired element on a flat pure #ff00ff background if chroma key is required.
+Return a PNG with a real transparent alpha channel, not a checkerboard or a solid-color background.
+Preserve semitransparent shadows, glow, antialiasing, and the agreed canvas padding.
 Do not include runtime text, placeholder text, full-screen UI, debug overlays, or unrelated controls.
 Do not add new decorative elements.
-The output should be suitable for chroma-key removal into a transparent PNG.
+The output should be ready for compositing onto both dark and light UI backgrounds.
 ```
 
 中文说明：
@@ -1127,7 +1142,7 @@ The output should be suitable for chroma-key removal into a transparent PNG.
 - 必须明确修复缺失、遮挡、破边、文字污染或透明边缘区域。
 - 必须明确不能包含运行时文字、整屏 UI 或无关控件。
 - 必须要求保持原形状、颜色、质感和比例。
-- 必须要求纯色背景。
+- 默认要求真实透明输出。仅显式 chroma 兜底时将透明输出要求替换为纯色背景要求，并记录实际 key color 与失败原因。
 - 不要让模型自由设计新风格。
 
 ## Appendix B: ShopView Example

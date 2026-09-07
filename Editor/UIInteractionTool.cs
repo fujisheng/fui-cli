@@ -515,14 +515,15 @@ namespace FUI.Cli
             foreach (var result in results)
             {
                 var hitObject = result.gameObject;
-                if (hitObject == null || hitObject == target)
+                if (hitObject == null)
                 {
                     continue;
                 }
 
-                if (hitObject.transform.IsChildOf(target.transform))
+                // RaycastAll is front-to-back. Reaching the target means later hits are behind it.
+                if (hitObject == target || hitObject.transform.IsChildOf(target.transform))
                 {
-                    continue;
+                    return null;
                 }
 
                 if (target.transform.IsChildOf(hitObject.transform))
