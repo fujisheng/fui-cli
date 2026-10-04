@@ -13,6 +13,7 @@ namespace FUI.Cli
         public bool interactable=true, isOn, allowSwitchOff, blocksRaycasts=true, showMaskGraphic=true;
         public float alpha=1, spacing, cellWidth=100, cellHeight=100, aspectRatio=1, fillAmount=1, preferredWidth=-1, preferredHeight=-1, flexibleWidth=-1, flexibleHeight=-1;
         public string fillMethod="Horizontal";
+        public string raycastTarget="";
         public bool fillClockwise=true, preserveAspect;
         public int fillOrigin;
         public int padding, characterLimit;
@@ -23,6 +24,7 @@ namespace FUI.Cli
         static void ConfigureControlOptions(GameObject go, WebVisualNode node)
         {
             var c=node.control ?? new WebControlOptions();
+            if (bool.TryParse(c.raycastTarget, out var raycast) && go.TryGetComponent<Graphic>(out var graphic)) graphic.raycastTarget = raycast;
             if(go.TryGetComponent<Image>(out var image)) { image.preserveAspect=c.preserveAspect;image.fillMethod=(Image.FillMethod)Enum.Parse(typeof(Image.FillMethod),c.fillMethod);image.fillAmount=Mathf.Clamp01(c.fillAmount);image.fillClockwise=c.fillClockwise;image.fillOrigin=c.fillOrigin; }
             if(go.TryGetComponent<UnityEngine.UI.LayoutElement>(out var layoutElement)) { layoutElement.preferredWidth=c.preferredWidth;layoutElement.preferredHeight=c.preferredHeight;layoutElement.flexibleWidth=c.flexibleWidth;layoutElement.flexibleHeight=c.flexibleHeight; }
             if(go.TryGetComponent<Selectable>(out var selectable)) selectable.interactable=c.interactable;

@@ -19,6 +19,7 @@ namespace FUI.Cli
         public float minWidth = -1, minHeight = -1, preferredWidth = -1, preferredHeight = -1;
         public float flexibleWidth = -1, flexibleHeight = -1;
         public int columns = 1;
+        public string gridConstraint = "FixedColumnCount";
         public float cellWidth = 100, cellHeight = 100;
     }
     static partial class WebVisualUiPrefabBuilder
@@ -33,7 +34,11 @@ namespace FUI.Cli
             if (l.anchorMin?.Length == 2 && l.anchorMax?.Length == 2)
                 for (int i=0;i<2;i++) if(l.anchorMin[i]<0 || l.anchorMax[i]>1 || l.anchorMin[i]>l.anchorMax[i]) Error("Invalid anchor interval.");
             if (l.mode == "managed" && l.contentHeight) Error("Parent layout and child fitter cannot both own height.");
-            if (l.group == "grid" && (l.columns<1 || l.cellWidth<=0 || l.cellHeight<=0)) Error("Grid requires positive cell size and column count.");
+            if (l.group == "grid")
+            {
+                if (!new[] { "Flexible", "FixedColumnCount", "FixedRowCount" }.Contains(l.gridConstraint)) Error("Unknown grid constraint.");
+                if (l.cellWidth <= 0 || l.cellHeight <= 0 || (l.gridConstraint != "Flexible" && l.columns < 1)) Error("Grid requires positive cell size and a count for fixed constraints.");
+            }
             if (l.padding != null && l.padding.Length != 4) Error("Padding must contain left/right/top/bottom.");
             if (!string.IsNullOrEmpty(l.group)) foreach(var child in node.children)
                 if (!child.layout.ignore && child.layout.mode != "managed") Error("Layout child must declare managed positioning or ignore: " + child.id);
@@ -68,7 +73,8 @@ namespace FUI.Cli
             if(l.group=="grid")
             {
                 var grid=EnsureComponent<GridLayoutGroup>(go);group=grid;
-                grid.constraint=GridLayoutGroup.Constraint.FixedColumnCount;grid.constraintCount=l.columns;
+                grid.constraint=(GridLayoutGroup.Constraint)Enum.Parse(typeof(GridLayoutGroup.Constraint), l.gridConstraint);grid.constraintCount=Mathf.Max(1,l.columns);
+                grid.startAxis=GridLayoutGroup.Axis.Horizontal;
                 grid.cellSize=new Vector2(l.cellWidth,l.cellHeight);grid.spacing=new Vector2(l.spacingX,l.spacingY);
             }
             if(group!=null)

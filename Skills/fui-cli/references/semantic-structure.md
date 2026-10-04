@@ -60,7 +60,7 @@ Slider 的 fill 和 handle 通常分别置于 FillArea / HandleArea 下，轨道
 - 通用交互：interactable；Toggle：isOn；ToggleGroup：allowSwitchOff。
 - Input：characterLimit、lineType（SingleLine/MultiLineSubmit/MultiLineNewline）、contentType。
 - CanvasGroup：alpha、interactable、blocksRaycasts；Mask：showMaskGraphic。
-- Image：preserveAspect、fillMethod、fillAmount、fillOrigin、fillClockwise；类型仍用 data-image-type。
+- Image：preserveAspect、fillMethod、fillAmount、fillOrigin、fillClockwise；类型仍用 data-image-type。可显式使用 `raycastTarget:"true"` 或 `"false"` 配置 Graphic 的射线接收；省略时保留控件原有默认值。
 - 布局：spacing、padding（四边相同）、cellWidth、cellHeight。
 - ContentSizeFitter：horizontalFit、verticalFit；AspectRatioFitter：aspectRatio、aspectMode。
 - LayoutElement：preferredWidth、preferredHeight、flexibleWidth、flexibleHeight。

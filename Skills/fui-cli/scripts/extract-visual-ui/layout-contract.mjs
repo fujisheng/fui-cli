@@ -11,6 +11,10 @@ export function validateLayout(node, parent) {
  if(parent?.layout?.group && !l.ignore && l.mode!=='managed')fail('layout child has competing positioning');
  if(l.mode==='managed' && l.contentHeight)fail('parent and fitter both own height');
  if(l.padding && (l.padding.length!==4||l.padding.some(v=>!Number.isInteger(v)||v<0)))fail('padding requires four nonnegative integers');
- if(l.group==='grid' && (!(l.columns>0)||!(l.cellWidth>0)||!(l.cellHeight>0)))fail('invalid grid dimensions');
+ if(l.group==='grid'){
+  const constraint=l.gridConstraint||'FixedColumnCount';
+  if(!['Flexible','FixedColumnCount','FixedRowCount'].includes(constraint))fail('unknown grid constraint');
+  if(!(l.cellWidth>0)||!(l.cellHeight>0)||(constraint!=='Flexible'&&!(l.columns>0)))fail('invalid grid dimensions');
+ }
  for(const child of node.children||[])validateLayout(child,node);
 }

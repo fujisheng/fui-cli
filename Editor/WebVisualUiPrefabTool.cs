@@ -427,12 +427,7 @@ namespace FUI.Cli
                         return result;
                     }
 
-                    var targetRect = targetParent as RectTransform;
-                    if (targetRect != null)
-                    {
-                        rootRect.width = targetRect.rect.width;
-                        rootRect.height = targetRect.rect.height;
-                    }
+                    rootRect = ResolvePatchReferenceRect(root.transform, targetParent, rootRect);
                 }
 
                 foreach (var node in GetRootChildren(plan))
@@ -491,6 +486,42 @@ namespace FUI.Cli
                     }
                 }
             }
+        }
+
+        static WebVisualRect ResolvePatchReferenceRect(Transform root, Transform target, WebVisualRect reference)
+        {
+            // 离线加载的 Overlay Canvas 可能为零尺寸；按设计分辨率沿锚点链推导，
+            // 不依赖当前 Game View，也不修改待保存的父级 RectTransform。
+            var ancestors = new Stack<RectTransform>();
+            for (var current = target; current != root; current = current.parent)
+            {
+                if (current is RectTransform rect)
+                {
+                    ancestors.Push(rect);
+                }
+            }
+
+            var result = new WebVisualRect
+            {
+                x = reference.x,
+                y = reference.y,
+                width = reference.width,
+                height = reference.height,
+            };
+            while (ancestors.Count > 0)
+            {
+                var child = ancestors.Pop();
+                var width = result.width * (child.anchorMax.x - child.anchorMin.x) + child.sizeDelta.x;
+                var height = result.height * (child.anchorMax.y - child.anchorMin.y) + child.sizeDelta.y;
+                var left = result.width * child.anchorMin.x + child.offsetMin.x;
+                var bottom = result.height * child.anchorMin.y + child.offsetMin.y;
+                result.x += left;
+                result.y += result.height - bottom - height;
+                result.width = width;
+                result.height = height;
+            }
+
+            return result;
         }
 
         static Transform FindPatchParent(Transform root, string rawPath)
@@ -1371,6 +1402,10 @@ namespace FUI.Cli
         static GridLayoutGroup.Constraint ParseGridConstraint(string value)
         {
             var normalized = (value ?? string.Empty).Trim().ToLowerInvariant().Replace("-", string.Empty).Replace("_", string.Empty);
+            if (normalized == "flexible")
+            {
+                return GridLayoutGroup.Constraint.Flexible;
+            }
             return normalized == "fixedrowcount" ? GridLayoutGroup.Constraint.FixedRowCount : GridLayoutGroup.Constraint.FixedColumnCount;
         }
 

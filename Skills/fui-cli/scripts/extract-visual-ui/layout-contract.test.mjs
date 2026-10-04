@@ -8,3 +8,7 @@ test('managed item cannot drive own height',()=>assert.throws(()=>validateLayout
 test('content fitter can own height of a top anchored group',()=>validateLayout({id:'content',layout:{mode:'anchored',anchorMin:[0,1],anchorMax:[1,1],group:'vertical',contentHeight:true},children:[{id:'row',layout:{mode:'managed'}}]}));
 test('decorative backing can ignore parent layout',()=>validateLayout({id:'rows',layout:{group:'vertical'},children:[{id:'backing',layout:{ignore:true}}]}));
 test('inverted anchors fail before import',()=>assert.throws(()=>validateLayout({id:'bad',layout:{mode:'anchored',anchorMin:[1,0],anchorMax:[0,1]}}),/invalid anchors/));
+
+test('flexible grid derives columns from prefab width',()=>validateLayout({id:'grid',layout:{group:'grid',gridConstraint:'Flexible',cellWidth:80,cellHeight:80}}));
+test('fixed grid still requires positive count',()=>assert.throws(()=>validateLayout({id:'grid',layout:{group:'grid',gridConstraint:'FixedColumnCount',columns:0,cellWidth:80,cellHeight:80}}),/invalid grid/));
+test('grid rejects unknown constraint',()=>assert.throws(()=>validateLayout({id:'grid',layout:{group:'grid',gridConstraint:'Magic',columns:1,cellWidth:80,cellHeight:80}}),/unknown grid/));

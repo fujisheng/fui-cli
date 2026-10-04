@@ -12,7 +12,7 @@ reference rects describe the initial pose, not the sole runtime positioning poli
 - Managed children declare min/preferred/flexible width/height; `preferredHeight:-2` delegates height
   to the native Text or other ILayoutElement provider. Omitted preferred sizes use the reference rect.
 - `ignore:true` excludes a decorative child from the parent layout without discarding its anchors.
-- Grid uses positive `columns`, `cellWidth`, `cellHeight`. No implicit responsive column inference.
+- Grid uses positive `cellWidth` and `cellHeight`. Explicit `gridConstraint:"Flexible"` lets native UGUI derive columns from the prefab width; fixed constraints require positive `columns`. Omitted constraint remains `FixedColumnCount`. No business script should overwrite authored grid alignment or dimensions.
 - `contentHeight:true` adds a vertical ContentSizeFitter to an anchored content node. It must not
   compete with a parent layout owning the same height.
 - `safeArea:true` adds `FUI.Rendering.UGUI.SafeAreaFitter`. The runtime component belongs to FUI;
