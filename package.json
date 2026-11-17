@@ -1,7 +1,7 @@
 {
   "name": "com.fujisheng.fui.cli",
   "displayName": "FUI Cli",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "unity": "2022.3",
   "keywords": [
     "unity",
@@ -12,7 +12,8 @@
   ],
   "description": "",
   "dependencies": {
-    "com.fujisheng.fui": "1.0.3",
+    "com.fujisheng.fui": "2.0.0",
+    "com.fujisheng.fui.ugui": "1.0.0",
     "com.fujisheng.unitycli": "0.4.0"
   }
 }
