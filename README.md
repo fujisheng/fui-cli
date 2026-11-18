@@ -250,18 +250,23 @@ AI 生成测试报告
 ```json
 {
   "dependencies": {
+    "com.fujisheng.fui": "https://github.com/fujisheng/FUI.git?path=/Packages/com.fujisheng.fui#main",
+    "com.fujisheng.fui.ugui": "https://github.com/fujisheng/FUI.git?path=/Packages/com.fujisheng.fui.ugui#main",
+    "com.fujisheng.unitycli": "https://github.com/fujisheng/UnityCli.git#main",
     "com.fujisheng.fui.cli": "https://github.com/fujisheng/fui-cli.git#main"
   }
 }
 ```
 
+`1.0.2` 使用拆分的 Core 和 uGUI 包。Web → Prefab 提供灵活网格与安全区布局生成，运行态诊断继续通过 UnityCLI。
+
 ### 前置依赖
 
 | 依赖 | 版本 | 说明 |
 |------|------|------|
-| [Unity](https://unity.com/) | 2022.3+ | FUI SourceGenerator 需要 Unity 2022.3 及以上 |
-| [FUI](https://github.com/fujisheng/FUI) | main | FUI 核心框架（MVVM + UGUI） |
-| [UnityCli](https://github.com/fujisheng/unitycli) | main | Named Pipe 桥接层，提供 CLI ↔ Editor 通信 |
+| [Unity](https://unity.com/) | 6000.0+ | 安装 FUI Core 2.0 与 uGUI 后端所需 |
+| [FUI](https://github.com/fujisheng/FUI) | Core 2.0.0 + uGUI 1.0.0 | 分别安装 Core 和 `com.fujisheng.fui.ugui` |
+| [UnityCli](https://github.com/fujisheng/unitycli) | 0.4.0+ | Named Pipe 桥接层；当前 Git 安装为 0.5.0 |
 | [Node.js](https://nodejs.org/) | 18+ | Web 原型提取脚本运行时 |
 
 ---
